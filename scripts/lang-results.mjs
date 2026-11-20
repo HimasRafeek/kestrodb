@@ -13,9 +13,8 @@ const sets = readdirSync(dir).filter(f => /^(php|python)-[a-z]+\.json$/.test(f))
     note: `${r.cpu}, ${r.cores} threads${r.os ? ', ' + r.os : ''}, ${new Date(r.date).toISOString().slice(0, 10)}. ${r.writesPerProcess} durable writes and ${r.readsPerProcess.toLocaleString('en-US')} random reads per process, ${r.keys.toLocaleString('en-US')} keys.${r.mysql ? '' : ' MySQL not measured in this set.'}`,
     rows: r.rows.map(row => {
       const out = {workers: row.workers};
-      // Sets recorded before the rename name KestroDB by its former name, HimasDB.
       for (const name of ['KestroDB', 'SQLite', 'MySQL']) {
-        const v = row[name] ?? (name === 'KestroDB' ? row.HimasDB : undefined);
+        const v = row[name];
         if (v) out[name] = {writes: Math.round(v.writes), reads: Math.round(v.reads)};
       }
       return out;

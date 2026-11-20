@@ -218,8 +218,8 @@ Hardening (2026-11-19):
   its write before sleeping (Windows). 0, 50 and 200 measured within noise of each other
   on the mixed workload.
 
-Renamed to KestroDB (2026-11-19):
-- HimasDB is now KestroDB everywhere, with no aliases: kestro-server, libkestrodb /
+Names (2026-11-19):
+- Every binary, package and variable uses the KestroDB names, with no aliases: kestro-server, libkestrodb /
   kestrodb.dll and kestrodb.h (C functions kestro_*), the kestrodb npm package
   (KestroDBError), the PHP namespace KestroDB (clients/php/KestroDB.php), the Python module
   kestrodb, KESTRO_* / KESTRODB_TOKEN environment variables, server messages (KESTRODB

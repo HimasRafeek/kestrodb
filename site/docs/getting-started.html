@@ -76,10 +76,6 @@ db.close();</code></pre>
     <li>One process owns a database file at a time; a second owner gets <code>LOCKED</code>. To share a database between processes, run <a href="server.html"><code>kestro-server</code></a>.</li>
     <li><code>close()</code> waits for queued async writes, then closes. <code>Database</code> also supports <code>using</code>.</li>
   </ul>
-  <div class="callout callout-note" role="note">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
-    <div><p><span class="callout-title">Formerly HimasDB.</span> KestroDB was called HimasDB before 0.9.0. Older <code>.hdb</code> files open unchanged: new files are written with the <code>KDBNAT02</code> / <code>KDBG0002</code> markers, and <code>HDBNAT02</code> / <code>HDBG0002</code> are still read. The names have no aliases, so use <code>kestrodb</code>, <code>kestro-server</code> and <code>KESTRO_*</code> in code. See <a href="roadmap.html#rename">Coming from HimasDB</a>.</p></div>
-  </div>
 
   <h3 id="key-value">The key/value API</h3>
   <p>Next to SQL, a key/value API (<code>set</code>, <code>get</code>, <code>getMany</code>, <code>batch</code>) gives the fastest access by key. This is the tour from <code>example.mjs</code>:</p>

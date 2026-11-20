@@ -12,7 +12,7 @@
   "durable": 1000,
   "concurrency": 256,
   "runs": 3,
-  "himas": {
+  "kestro": {
     "keys": 0,
     "bytes": 8192,
     "txid": 0,
@@ -31,15 +31,15 @@
   "engines": [
     {
       "id": "inProcess",
-      "name": "HimasDB in-process",
-      "kind": "himas",
+      "name": "KestroDB in-process",
+      "kind": "kestro",
       "version": "0.8.0",
       "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; concurrent async writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
     },
     {
       "id": "worker",
-      "name": "HimasDB worker",
-      "kind": "himas",
+      "name": "KestroDB worker",
+      "kind": "kestro",
       "version": "0.8.0",
       "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; queued writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
     },

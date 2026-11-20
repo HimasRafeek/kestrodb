@@ -52,7 +52,7 @@
   </ul>
 
   <h2 id="file-format">File format</h2>
-  <p>The native format is unchanged since 0.6, apart from its markers: new files are written with <strong>KDBNAT02</strong> and <strong>KDBG0002</strong>. Files from HimasDB, the earlier name, use HDBNAT02/HDBG0002; they still open and take new commits, and one file may then hold both spellings. Their index snapshot and <code>.idx</code> cache are rebuilt once. All integers are little-endian; strings and values are length-delimited bytes (UTF-8 JSON from Node). The full byte layout is in <code>FORMAT.md</code>.</p>
+  <p>The native format is unchanged since 0.6, apart from its markers: new files are written with <strong>KDBNAT02</strong> and <strong>KDBG0002</strong>. Files written by versions before 0.9 use HDBNAT02/HDBG0002; they still open and take new commits, and one file may then hold both spellings. Their index snapshot and <code>.idx</code> cache are rebuilt once. All integers are little-endian; strings and values are length-delimited bytes (UTF-8 JSON from Node). The full byte layout is in <code>FORMAT.md</code>.</p>
   <h3 id="metadata">Metadata slots</h3>
   <p>The first 8,192 bytes hold two 4,096-byte slots. Generation G is stored in slot G modulo 2, so a commit always writes the slot that is not current. Each populated slot holds:</p>
   <table aria-label="Metadata slot layout">

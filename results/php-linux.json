@@ -11,8 +11,8 @@
   "keys": 20000,
   "mysql": false,
   "rows": [
-    {"workers": 1, "HimasDB": {"writes": 3986.2862935800163, "reads": 482042.96008550643}, "HimasDB-socket": {"writes": 4021.127444714304, "reads": 13685.169617405856}, "SQLite": {"writes": 2351.8186864637246, "reads": 180662.03486343648}},
-    {"workers": 2, "HimasDB": {"writes": 5447.265958137622, "reads": 633150.27549249}, "HimasDB-socket": {"writes": 5320.706416141097, "reads": 68913.37449379492}, "SQLite": {"writes": 2686.1281208606, "reads": 322788.3692249677}},
-    {"workers": 4, "HimasDB": {"writes": 6975.731679428987, "reads": 770363.8943351868}, "HimasDB-socket": {"writes": 8277.183317244362, "reads": 62868.81507842856}, "SQLite": {"writes": 2417.492988635321, "reads": 278298.58032560366}}
+    {"workers": 1, "KestroDB": {"writes": 3986.2862935800163, "reads": 482042.96008550643}, "KestroDB-socket": {"writes": 4021.127444714304, "reads": 13685.169617405856}, "SQLite": {"writes": 2351.8186864637246, "reads": 180662.03486343648}},
+    {"workers": 2, "KestroDB": {"writes": 5447.265958137622, "reads": 633150.27549249}, "KestroDB-socket": {"writes": 5320.706416141097, "reads": 68913.37449379492}, "SQLite": {"writes": 2686.1281208606, "reads": 322788.3692249677}},
+    {"workers": 4, "KestroDB": {"writes": 6975.731679428987, "reads": 770363.8943351868}, "KestroDB-socket": {"writes": 8277.183317244362, "reads": 62868.81507842856}, "SQLite": {"writes": 2417.492988635321, "reads": 278298.58032560366}}
   ]
 }

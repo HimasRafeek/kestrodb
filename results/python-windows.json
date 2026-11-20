@@ -11,11 +11,11 @@
   "rows": [
     {
       "workers": 1,
-      "HimasDB": {
+      "KestroDB": {
         "writes": 4456.683832852822,
         "reads": 170377.57385945885
       },
-      "HimasDB-socket": {
+      "KestroDB-socket": {
         "writes": 6448.046816949622,
         "reads": 31182.422536551567
       },
@@ -23,18 +23,18 @@
         "writes": 3756.1940470042478,
         "reads": 95497.85521079043
       },
-      "HimasDB-embedded": {
+      "KestroDB-embedded": {
         "writes": 9219.93918300055,
         "reads": 173172.7245890336
       }
     },
     {
       "workers": 4,
-      "HimasDB": {
+      "KestroDB": {
         "writes": 17069.79223897605,
         "reads": 671143.67378125
       },
-      "HimasDB-socket": {
+      "KestroDB-socket": {
         "writes": 13837.487834516432,
         "reads": 84430.06289523399
       },
@@ -45,11 +45,11 @@
     },
     {
       "workers": 16,
-      "HimasDB": {
+      "KestroDB": {
         "writes": 22914.789639740127,
         "reads": 874108.117190563
       },
-      "HimasDB-socket": {
+      "KestroDB-socket": {
         "writes": 32776.85572599368,
         "reads": 209894.16757382036
       },

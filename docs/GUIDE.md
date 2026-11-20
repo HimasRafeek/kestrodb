@@ -821,8 +821,8 @@ directly instead of re-reading the whole log.
 
 ## Moving a database between systems
 
-The file format (unchanged since 0.6 apart from the KDB spelling of its markers; files from
-HimasDB, the earlier name, open and keep working) uses explicit little-endian integers and
+The file format (unchanged since 0.6 apart from the KDB spelling of its markers; files written by
+earlier versions, with the HDB markers, open and keep working) uses explicit little-endian integers and
 no pointers or OS-specific layout. Close the database or use `backup()`, copy the file,
 open it and call `verify()`. Copying a closed file copies its index snapshot too;
 `backup()` and `compactTo()` copy committed data only, and the copy writes a snapshot

@@ -24,10 +24,6 @@
   <p>0.9.0 (2026-11-19) follows 0.8.0 (2026-11-15), which added <code>kestro-server</code>, the PHP, Python and Node clients, the C library with reader and owner modes, the in-process Node addon, group commit and the index snapshot. The 0.9.0 entries in <code>CHANGELOG.md</code>:</p>
   <div class="card-grid">
     <div class="card">
-      <h3 class="no-toc">Renamed to KestroDB <span class="badge badge-accent">Available</span></h3>
-      <p>HimasDB is now KestroDB everywhere, with no aliases: <code>kestro-server</code>, <code>kestrodb.dll</code> / <code>libkestrodb.so</code> and <code>kestro_*</code> C functions, the <code>kestrodb</code> npm package, the <code>KestroDB</code> PHP namespace, the <code>kestrodb</code> Python module, <code>KESTRO_*</code> / <code>KESTRODB_TOKEN</code> variables and <code>.kdb</code> in the docs. Older files open unchanged (see <a href="#rename">below</a>).</p>
-    </div>
-    <div class="card">
       <h3 class="no-toc">Enforced constraints <span class="badge badge-accent">Available</span></h3>
       <p><code>CHECK</code>, <code>FOREIGN KEY</code> with <code>NO ACTION</code>, <code>RESTRICT</code>, <code>CASCADE</code>, <code>SET NULL</code> and <code>SET DEFAULT</code> (chained, self-references), and multi-column <code>UNIQUE</code>; <code>ALTER TABLE ADD</code>/<code>DROP CONSTRAINT</code>. <a href="sql.html#constraints">Constraints</a>.</p>
     </div>
@@ -81,9 +77,6 @@
     </div>
   </div>
   <p>The same release also lists faster commits (one disk write per commit on Windows, SQL group commit across server connections) and the SQL base it builds on: enforced column types, transactions, joins and subqueries, <code>ALTER TABLE ... ADD / DROP / RENAME COLUMN</code> and the column cache. See <a href="performance.html#server-sql">kestro-server against MariaDB and PostgreSQL</a>.</p>
-
-  <h3 id="rename">Coming from HimasDB</h3>
-  <p>KestroDB was called HimasDB before 0.9.0. Existing <code>.hdb</code> files open unchanged and keep taking commits: new files are written with the <code>KDBNAT02</code> / <code>KDBG0002</code> markers, and the older <code>HDBNAT02</code> / <code>HDBG0002</code> are still read (one file may hold both). Their index snapshot and <code>.idx</code> cache are rebuilt once. Any file extension opens; the docs use <code>.kdb</code>. Code must switch to the new names, since there are no aliases.</p>
 
   <h2 id="not-supported">Not supported today</h2>
   <h3 id="sql-gaps">SQL</h3>

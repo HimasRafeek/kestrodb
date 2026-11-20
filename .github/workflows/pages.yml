@@ -1,0 +1,41 @@
+name: Website
+# Publishes site/ to GitHub Pages, with the benchmark tracker (index.html and its results/
+# data) under /tracker/. Runs when the site, the tracker or the recorded results change.
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'index.html', 'results/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/tracker/results
+          cp -r site/. _site/
+          cp index.html _site/tracker/index.html
+          cp results/bench-history.js results/lang-results.js _site/tracker/results/
+          # In the repository the tracker sits one level above site/; here it is site/tracker/.
+          sed -i "s#url('../index.html')#url('tracker/index.html')#" _site/assets/site.js
+          sed -i 's#href="../../index.html"#href="../tracker/index.html"#g' _site/docs/performance.html
+          grep -q "url('tracker/index.html')" _site/assets/site.js
+          touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

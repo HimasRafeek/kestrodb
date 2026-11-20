@@ -1,0 +1,71 @@
+# Build output (CMake, scripts/build.mjs, scripts/build-linux.sh)
+/build/
+/build-*/
+/bin/
+/out/
+/prebuilds/
+CMakeUserPresets.json
+
+# Release packages (scripts/package.mjs): published as GitHub release assets, not committed
+/dist/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+/clients/dotnet/**/bin/
+/clients/dotnet/**/obj/
+/clients/rust/target/
+/clients/java/build/
+/clients/java/kestrodb.jar
+/clients/php/vendor/
+/clients/php/composer.lock
+
+# Databases and their side files made by tests, examples and benchmarks
+*.kdb
+*.kdb.*
+*.hdb
+!/fixtures/*.hdb
+*.sorting
+*.sort
+
+# Fuzzing (fuzz/seed.mjs writes the corpora; crashes are local)
+/fuzz/corpus-*/
+crash-*
+leak-*
+timeout-*
+
+# Logs and local results
+*.log
+/results/*
+!/results/bench-history.json
+!/results/bench-history.js
+!/results/lang-results.js
+!/results/php-linux.json
+!/results/php-windows.json
+!/results/python-linux.json
+!/results/python-windows.json
+!/results/linux-ubuntu-2404-bench.json
+!/results/linux-regression.json
+!/results/linux-regression-initial.json
+!/results/linux-regression-pinned-exploratory.json
+
+# Secrets that tests or local servers may use
+*.token
+*.pem
+*.key
+*.pfx
+token.txt
+.env
+.env.*
+
+# Editors and operating systems
+.vs/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

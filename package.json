@@ -1,0 +1,75 @@
+{
+  "name": "kestrodb",
+  "version": "0.9.0",
+  "description": "Embedded database for Node.js: SQL and key/value in one durable file, MVCC transactions, a network server with replication and failover, and clients for other languages",
+  "keywords": [
+    "database",
+    "embedded",
+    "embedded-database",
+    "sql",
+    "sqlite-alternative",
+    "key-value",
+    "kv",
+    "durable",
+    "acid",
+    "mvcc",
+    "transactions",
+    "replication",
+    "native",
+    "addon"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HimasRafeek/kestrodb.git"
+  },
+  "homepage": "https://github.com/HimasRafeek/kestrodb#readme",
+  "bugs": {
+    "url": "https://github.com/HimasRafeek/kestrodb/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./worker": "./worker/client.mjs",
+    "./bulk": "./bulk.mjs",
+    "./remote": "./remote.mjs",
+    "./native": "./native.mjs"
+  },
+  "bin": {
+    "kestro-server": "cli/kestro-server.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "native.mjs",
+    "remote.mjs",
+    "protocol.mjs",
+    "sqlapi.mjs",
+    "bulk.mjs",
+    "validation.mjs",
+    "worker/client.mjs",
+    "cli/",
+    "prebuilds/",
+    "tools/viewer/server.mjs",
+    "LICENSE",
+    "NOTICE",
+    "THIRD-PARTY.md",
+    "third-party-notices/"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "win32",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs",
+    "bench": "node bench/compare.mjs",
+    "viewer": "node --max-old-space-size=64 tools/viewer/server.mjs"
+  }
+}

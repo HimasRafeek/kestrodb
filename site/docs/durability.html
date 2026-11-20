@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Durability &amp; integrity · KestroDB</title>
+<meta name="description" content="How KestroDB makes writes durable on each platform, how it checks data, its file format, the index snapshot, online backups, point-in-time restore and compaction, and platform validation status, including power-loss simulation, fuzzing, sanitizers and soak tests.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="durability" class="bg-bg text-ink">
+<article id="doc">
+  <header class="doc-head">
+    <p class="eyebrow">Engine</p>
+    <h1>Durability &amp; integrity</h1>
+    <p class="lead">Every write is on disk before the call returns, every transaction is hash-chained, and every value is checked when read. This page explains what that means on each platform, what the file looks like, and what has and has not been tested.</p>
+  </header>
+
+  <h2 id="durable-commits">Durable commits</h2>
+  <p>A durable commit means:</p>
+  <table aria-label="Durable commit by platform">
+    <thead><tr><th>Platform</th><th>How a commit becomes durable</th></tr></thead>
+    <tbody>
+      <tr><td>Windows</td><td>The database handle is opened write-through (<code>FILE_FLAG_WRITE_THROUGH</code>), so each write completes only after it reaches stable media. Commits overwrite preallocated space, and the engine calls <code>FlushFileBuffers</code> whenever it grows that space, so the file&rsquo;s size is durable before any commit relies on it.</td></tr>
+      <tr><td>Linux</td><td><code>fdatasync</code> before each acknowledgement (data, plus the file size when it changes; commits overwrite preallocated space).</td></tr>
+      <tr><td>macOS</td><td><code>F_FULLFSYNC</code>.</td></tr>
+    </tbody>
+  </table>
+  <p>Write-through on Windows was chosen from a measurement, not assumed: <code>FlushFileBuffers</code> after each small commit cost 333&ndash;390&nbsp;&micro;s; write-through writes into preallocated space cost 67&nbsp;&micro;s, about 5&times; less. Write-through on a growing file cost 148&ndash;166&nbsp;&micro;s, because the file size changes on every write &mdash; hence the preallocated reserve.</p>
+  <h3 id="ordered-sync">Ordered sync (Linux and macOS)</h3>
+  <p>On Linux and macOS the default omits an optional first barrier; a successful file flush is still required before every acknowledgement. In that single-barrier mode a new metadata slot can reach disk ahead of its data if an unacknowledged write is interrupted; reopen rejects that state. Set <code>orderedSync: true</code> for the original data-before-metadata policy. Both modes reject torn metadata.</p>
+  <h3 id="requirements">Requirements</h3>
+  <div class="callout callout-warn" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+    <div>
+      <p>Use a local file system with working locks and flushes: NTFS on Windows, local POSIX file systems elsewhere. <strong>Network shares, cloud-sync folders and multi-host shared disks are not supported.</strong></p>
+      <p>Storage hardware must honor flush requests (write-through relies on forced-unit-access, as SQL Server does). Power loss is tested in simulation (see <a href="#validation">below</a>); <strong>no physical power-loss testing on real hardware has been performed.</strong></p>
+    </div>
+  </div>
+  <p>An I/O failure can leave a write&rsquo;s outcome unknown (<code>UNKNOWN_COMMIT</code>): reopen and check before retrying.</p>
+
+  <h2 id="integrity">Integrity checks</h2>
+  <ul>
+    <li>Every transaction is stored with a <strong>SHA-256 hash chained to the previous one</strong>, and the metadata slots carry their own SHA-256.</li>
+    <li>Every value is <strong>checked against a keyed checksum when read</strong>: SipHash-2-4 for values up to 2 KiB and keyed BLAKE3 above. These checksums live only in RAM and are rebuilt on open (or taken from the index snapshot).</li>
+    <li>Damaged data is reported as <code>CORRUPT</code> and never returned. The engine does not repair it, so <strong>keep backups</strong>.</li>
+    <li><code>verify()</code> re-checks the whole file against its checksums at any time.</li>
+  </ul>
+
+  <h2 id="file-format">File format</h2>
+  <p>The native format is unchanged since 0.6, apart from its markers: new files are written with <strong>KDBNAT02</strong> and <strong>KDBG0002</strong>. Files from HimasDB, the earlier name, use HDBNAT02/HDBG0002; they still open and take new commits, and one file may then hold both spellings. Their index snapshot and <code>.idx</code> cache are rebuilt once. All integers are little-endian; strings and values are length-delimited bytes (UTF-8 JSON from Node). The full byte layout is in <code>FORMAT.md</code>.</p>
+  <h3 id="metadata">Metadata slots</h3>
+  <p>The first 8,192 bytes hold two 4,096-byte slots. Generation G is stored in slot G modulo 2, so a commit always writes the slot that is not current. Each populated slot holds:</p>
+  <table aria-label="Metadata slot layout">
+    <thead><tr><th class="num">Offset</th><th class="num">Length</th><th>Field</th></tr></thead>
+    <tbody>
+      <tr><td class="num">0</td><td class="num">8</td><td><code>KDBNAT02</code> magic (<code>HDBNAT02</code> in files written before the rename; both are read)</td></tr>
+      <tr><td class="num">8</td><td class="num">8</td><td>Commit generation</td></tr>
+      <tr><td class="num">16</td><td class="num">8</td><td>Last transaction ID</td></tr>
+      <tr><td class="num">24</td><td class="num">8</td><td>Exclusive committed byte boundary</td></tr>
+      <tr><td class="num">32</td><td class="num">16</td><td>Database random ID</td></tr>
+      <tr><td class="num">48</td><td class="num">32</td><td>Last group SHA-256</td></tr>
+      <tr><td class="num">80</td><td class="num">32</td><td>SHA-256 over bytes 0–79 (0.9): a slot torn at a sector boundary keeps its fields</td></tr>
+      <tr><td class="num">112</td><td class="num">3,952</td><td>Zero padding</td></tr>
+      <tr><td class="num">4,064</td><td class="num">32</td><td>SHA-256 over the preceding 4,064 bytes</td></tr>
+    </tbody>
+  </table>
+  <h3 id="groups">Transaction groups</h3>
+  <p>After the slots comes a log of transaction groups. Each group has a <code>KDBG0002</code> magic, payload length, transaction ID, flags, operation count and the <strong>previous group&rsquo;s SHA-256</strong>, then its operations, then a SHA-256 of header and payload. Each operation holds its kind (set or delete), expected version, key length, value length, key and value. Normal transaction payloads are bounded to 64 MiB.</p>
+  <h3 id="publication">How a commit is published</h3>
+  <ol>
+    <li>Under the writer mutex, validate all expected versions and encode the group. With group commit, several queued transactions are each validated against the ones accepted before them and encoded as their own chained group; one that fails validation fails alone.</li>
+    <li>Make sure the zero-filled reserve covers the new groups, then write them contiguously (flushing now if ordered sync is on).</li>
+    <li>Write the next metadata slot and flush the file, covering every write.</li>
+    <li>Update the in-memory index and return success to every transaction in the commit.</li>
+  </ol>
+  <p>The <strong>reserve</strong> keeps the file longer than the committed boundary, grown in steps of 1/8 of the committed size (1 MiB to 64 MiB), so commits overwrite allocated bytes instead of growing the file. Bytes past the committed boundary are an uncommitted tail that every reader validates around and removes on open; since 0.8 a clean close also trims the reserve.</p>
+  <p>On Windows a commit needs one disk write: a group that is complete on disk and continues the chain (next transaction ID, previous hash, SHA-256) is committed, and the metadata slot is written through the cache and reaches the disk lazily (flushed on close). Opening walks past a stale slot and tolerates one damaged slot.</p>
+  <h3 id="read-consistency">Read consistency</h3>
+  <p><code>getMany</code> returns one consistent set, including missing keys, and a SQL <code>SELECT</code> sees one committed state. A long SQL read does not hold up writes: it lets waiting commits through and keeps reading the state it started with (MVCC; see <a href="sql.html#consistency">SQL consistency</a>). In the key/value API there is no multi-call snapshot: separate <code>get</code> calls may observe different commits.</p>
+  <p>A SQL transaction (<code>BEGIN</code> ... <code>COMMIT</code>) commits all its statements as one atomic, durable commit; other connections see nothing until <code>COMMIT</code>, then all of it at once. Plain <code>BEGIN</code> transactions write one at a time (serializable); <code>BEGIN CONCURRENT</code> ones run side by side under snapshot isolation, and the first to commit a row wins. A connection that closes or drops rolls its open transaction back, and a failed <code>COMMIT</code> (for example a disk error) ends the transaction. See <a href="sql.html#transactions">SQL transactions</a>.</p>
+
+  <h2 id="index-snapshot">Index snapshot</h2>
+  <p>On a clean close, and in the background once commits have been quiet for 50 ms, KestroDB writes an <strong>index snapshot</strong> into the end of the file: every key with its location, version and checksum, as one hash table per shard. The next open uses it directly instead of re-reading the whole log.</p>
+  <ul>
+    <li><strong>Compatible.</strong> It sits after the last committed byte, which every version since 0.4 treats as leftover space and discards. Older versions just re-read the log; so does 0.9 when the snapshot is missing, stale, damaged or from another file.</li>
+    <li><strong>Lazy.</strong> Lookups read the snapshot&rsquo;s tables straight from the mapped file. Each of its 64 sections is checksummed the first time it is used; a damaged one makes KestroDB rebuild the index from the log and carry on. The first write builds the in-memory index; read-only sessions never pay for it.</li>
+    <li><strong>Verified in the background.</strong> Once the database has been open for 50 ms, a background thread performs the same checks a full re-read would (every transaction&rsquo;s SHA-256, the hash chain, every value&rsquo;s checksum). If it finds damage, every later operation fails with <code>CORRUPT</code>. A database closed within 50 ms skips this; reads still check every value they return. With <code>verifyOnOpen: true</code> the full check finishes before open returns, so a damaged file fails to open. <code>stats()</code> reports <code>openedFrom</code>, <code>verification</code> and <code>indexMode</code>.</li>
+    <li><strong>Crash-friendly.</strong> Snapshots are also written when writes go quiet, so the first open after a crash is still fast, provided nothing was committed after the last snapshot.</li>
+    <li><strong>Checksum key.</strong> Value checksums are keyed. After a snapshot open, the key is the one stored in the snapshot: checksums still detect damaged bytes, but no longer stop someone who can rewrite the file (the same level as the file&rsquo;s SHA-256 chain).</li>
+  </ul>
+
+  <h2 id="backups">Backups and compaction</h2>
+  <ul>
+    <li><strong>Online backups.</strong> The log is append-only, so <code>backup(path)</code> reads the commit point under a short lock and copies the committed bytes while writes continue. Every copy is checked (SHA-256 and the chain of every transaction) in bounded memory before it is published under its final name.</li>
+    <li><strong>Scheduled backups and continuous archive.</strong> <code>kestro-server</code> can write a backup on an interval and keep the newest N, and keep an incremental archive (<code>archive.kdb</code> + <code>timeline</code>) for <strong>point-in-time restore</strong> by transaction or time into a new file. See <a href="server.html#backups">Backups and restore</a>.</li>
+    <li><strong>Online compaction.</strong> <code>compact()</code> rewrites the file to hold only current values while reads and writes continue. The new file is replayed in full before it replaces the old one (POSIX: an atomic replace; Windows: two renames, recovered on open), so a crash at any point leaves the database whole. See <a href="server.html#compaction">online compaction</a>.</li>
+    <li><code>compactTo(path)</code> writes a copy with only the current values. Old versions stay in the file until you compact; nothing reclaims space automatically. The compacted file keeps each key&rsquo;s version, so <code>expectedVersion</code> checks keep working.</li>
+    <li>Copies use a temporary file on the destination file system, flush and validate it, then publish it without overwriting. None silently replaces an existing database.</li>
+    <li>A large compacted file (a checkpoint above 64 MiB) and its backups require a 0.6 or newer reader.</li>
+    <li>The <code>.idx</code> sidecar and the <code>.sets</code> scratch file are caches: copy only the <code>.kdb</code> file for backups.</li>
+  </ul>
+  <h3 id="moving">Moving a database between systems</h3>
+  <p>The file format uses explicit little-endian integers and no pointers or OS-specific layout. Close the database or use <code>backup()</code>, copy the file, open it and call <code>verify()</code>. Copying a closed file copies its index snapshot too; <code>backup()</code> and <code>compactTo()</code> copy committed data only, and the copy writes a snapshot when it is next closed.</p>
+  <p>If a server&rsquo;s database file is replaced (a restored backup), in-process readers report <code>STALE</code>; restart the workers. To keep a live copy on another machine, run a <a href="server.html#replication">follower</a>.</p>
+
+  <h2 id="platform-status">Platform status</h2>
+  <table aria-label="Platform validation of 0.9.0">
+    <thead><tr><th>Target</th><th>Validation of 0.9.0</th></tr></thead>
+    <tbody>
+      <tr><td>Windows x64</td><td><span class="badge badge-accent">Tested</span> MSVC 2022, Windows 10: 50 portable C++ tests, the power-loss sweep, 119 Node tests (PHP, Python and Java clients included), the benchmarks, 3-hour and 1-hour soaks; GitHub&rsquo;s Windows runner on every push and pull request.</td></tr>
+      <tr><td>Linux x86-64</td><td><span class="badge badge-accent">Tested</span> GCC 13, Ubuntu 24.04 under WSL2 (<code>scripts/linux-check.sh</code>): the portable, POSIX and power-loss suites, 129 Node tests (Node, PHP, Python, Java, Go, Rust and .NET clients), the suites under AddressSanitizer + UndefinedBehaviorSanitizer, the benchmarks; GitHub&rsquo;s Ubuntu runner on every push and pull request, with AddressSanitizer + UBSan, ThreadSanitizer and fuzzing.</td></tr>
+      <tr><td>Linux ARM64</td><td><span class="badge badge-accent">Tested</span> GitHub&rsquo;s ubuntu-24.04-arm runner on every push and pull request: the native suites and every Node suite.</td></tr>
+      <tr><td>macOS (Apple Silicon)</td><td><span class="badge">No longer run</span> Passed on GitHub&rsquo;s macOS runner through 2026-11-19 (the native suites and every Node suite); not a target for now.</td></tr>
+    </tbody>
+  </table>
+  <p>Only 64-bit targets are supported. Linux commits use <code>fdatasync</code>. <code>.github/workflows/platforms.yml</code> builds and tests Linux x64, Linux ARM64 and Windows and runs AddressSanitizer + UBSan, ThreadSanitizer and fuzzing on every push and pull request; a longer job (100,000 random queries compared with SQLite, writers killed 50 times) runs weekly and on demand. macOS is not run. <code>scripts/linux-check.sh</code> runs the Linux checks locally (on Linux, or under WSL2). CI run #8 (synchronous replication, automatic failover and the POSIX power-loss fix) passed all 7 jobs, macOS included. Details are in <code>VALIDATION.md</code>.</p>
+  <h3 id="validation">What the tests cover</h3>
+  <ul>
+    <li><strong>Windows, 0.8:</strong> the native portable suite (including damaged-snapshot rebuilds under 8 concurrent readers, background and on-open corruption detection, and a 200,000-step randomized comparison of the index against <code>std::unordered_map</code>); the Node suite; process faults (after_data, before_sync, after_meta, torn_meta, sync errors) with write-through commits; <code>process.exit</code> with 1,000 queued async writes (reopen found all 1,000 and verify passed).</li>
+    <li><strong>Server and languages:</strong> 11/11 server tests &mdash; 8 connections &times; 200 writes get versions 1..1600, compare-and-swap across 16 connections has one winner, pipelined read-your-writes, token auth, connection limit, clean shutdown with snapshot, 4 PHP 8.2 and 4 Python 3.13 processes through the server and reading in-process. The multi-process reader test checks that a concurrent thread never sees a torn or older two-key state over 3,000 commits.</li>
+    <li><strong>Linux:</strong> server, C library and Python ran on an Ubuntu 24.04 cloud VM; 4 Python 3.12 processes over a Unix socket with in-process reads. A later round passed the portable suite 32/32 (SQL, queries against brute force, unique indexes, increments and a randomized column-cache test), with PHP 8.3 over TCP and over a Unix socket reading in-process through FFI, Python through ctypes and Python embedded mode; their SQL inserts from 6 processes produced exactly 120 rows.</li>
+    <li><strong>Added for 0.9.0:</strong> <code>tests/replication.test.mjs</code> (seeding, streaming inserts, updates, deletes, DDL and indexes, identical queries and bytes, refused writes, follower and leader restarts, <code>STALE</code> after a leader compaction, promotion); <code>tests/backup.test.mjs</code> (scheduled backups with retention while writing, archive, restore by transaction and by time, refusals, embedded archive and restore); online compaction with writers and readers running (mapped, paged index, pread) and under AddressSanitizer; <code>tests/sqldiff.test.mjs</code> (39 queries compared with SQLite) and <code>tests/constraints.test.mjs</code> (61 statements with the same outcome and tables as SQLite with <code>foreign_keys</code> on); PHP and Python client suites against a server, embedded, and across a server restart. On Linux, 2026-11-17 (before the SQL additions of 2026-11-18): 44/44 portable and 30/30 POSIX tests, including crash injection.</li>
+    <li><strong>Simulated power loss</strong> (<code>src/tests_powerloss.cpp</code>): every open, write, completion, flush and truncation is recorded; every disk state a power cut could leave (unflushed writes lost, written, or torn at 512-byte sectors) is rebuilt and must open, verify and keep every acknowledged transaction whole. It runs on Windows, on Linux under WSL2 and in CI. It led to two fixes in 0.9.0 (torn commit slots, and <code>verify()</code> after a recovery), and in CI to a third on Linux and macOS (recovery when a power loss keeps a newer commit slot but loses or tears its group).</li>
+    <li><strong>Process kills:</strong> <code>tests/crash.test.mjs</code> kills a writer at random moments, embedded and <code>kestro-server</code> with four connections: acknowledged transactions are present, none torn, and the file verifies.</li>
+    <li><strong>Fuzzing and sanitizers:</strong> four libFuzzer targets (SQL and JSON parsing, SQL execution on a live database, the wire protocol, opening damaged files) with AddressSanitizer + UBSan run in CI on every push and pull request, 3 minutes per target (3.1 million inputs in one run, no findings). The portable and POSIX suites run under AddressSanitizer + UBSan and under ThreadSanitizer, locally under WSL2 and in CI. <code>tests/sqlfuzz.test.mjs</code> compares random queries with SQLite.</li>
+    <li><strong>Linux under WSL2 (2026-11-20):</strong> the portable, power-loss and POSIX suites passed; 127 of 129 Node tests passed and 2 were skipped (Windows-only), with clients in Node, PHP 8.3, Python 3.12, Java 17, Go 1.23, Rust 1.100 and .NET 8 against the server, each with reconnect, <code>BUSY</code>, TLS and a 3-member cluster with a killed leader. ThreadSanitizer runs there only without address randomization (clang 18&rsquo;s runtime aborts on that kernel&rsquo;s) and without its deadlock detector, which stops at 64 locks held at once, which commits and compactions exceed; data races are still detected, and CI runs it on every push. The new clients found four bugs, all fixed: a stop after any <code>BUSY</code> hung; a restart right after a kill saw <code>LOCKED</code> for 100&ndash;300 ms (now retried for up to a second); a stop waited 120 s for silent clients; <code>BUSY</code> could be lost.</li>
+    <li><strong>Soak:</strong> <code>bench/soak.mjs</code> ran <code>kestro-server</code> under mixed load for 3 hours: 67 million operations, 0 errors, file verified. It found a file leak in online compaction, since fixed.</li>
+    <li><strong>MVCC and failover:</strong> long reads during 13&ndash;27K concurrent commits always see exact totals, and <code>BEGIN CONCURRENT</code> transfers from 4 threads with conflicts retried keep totals exact (also under ThreadSanitizer in CI). <code>tests/cluster.test.mjs</code>: a new leader 0.74&ndash;0.85 s after the old one is killed (400 ms election timeout), no acknowledged write lost, a former leader with an unconfirmed write cuts it and follows, and PHP and Python clients follow the leader.</li>
+    <li><strong>0.7 on Linux:</strong> AddressSanitizer + UndefinedBehaviorSanitizer (leak detection disabled) and ThreadSanitizer passed; 0.4 &rarr; 0.7 and 0.6 &rarr; 0.7 file compatibility passed.</li>
+  </ul>
+  <div class="callout callout-warn" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+    <div><p><span class="callout-title">Not tested yet.</span> Power cuts on real hardware, disk-full and hardware failure, days-long soak runs, and cross-OS file handoffs (Linux &rarr; Windows &rarr; macOS) with continued writes. Injected sync errors do not reproduce all disk failure patterns. KestroDB has not yet run real production workloads for long.</p></div>
+  </div>
+</article>
+</body>
+</html>

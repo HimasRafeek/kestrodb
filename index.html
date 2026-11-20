@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KestroDB benchmark tracker</title>
+<meta name="description" content="KestroDB against SQLite, LMDB and LevelDB: leaderboard, ranked charts and progress across versions.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --wash: rgba(11, 11, 11, 0.04);
+  --highlight: rgba(42, 120, 214, 0.08);
+  --good: #006300;
+  --bad: #d03b3b;
+  --kestro: #2a78d6;      /* KestroDB bars (slot 1 blue) */
+  --other: #898781;      /* other databases: neutral de-emphasis */
+  --s-inproc: #2a78d6;   /* slot 1 blue */
+  --s-worker: #eb6834;   /* slot 2 orange */
+  --s-sqlite: #1baf7a;   /* slot 3 aqua */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19; --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.05);
+    --highlight: rgba(57, 135, 229, 0.14); --good: #0ca30c; --bad: #e66767;
+    --kestro: #3987e5; --other: #6f6e69; --s-inproc: #3987e5; --s-worker: #d95926; --s-sqlite: #199e70;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19; --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.05);
+  --highlight: rgba(57, 135, 229, 0.14); --good: #0ca30c; --bad: #e66767;
+  --kestro: #3987e5; --other: #6f6e69; --s-inproc: #3987e5; --s-worker: #d95926; --s-sqlite: #199e70;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--text-primary); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1160px; margin: 0 auto; padding: 32px 16px 56px; }
+h1 { font-size: 26px; line-height: 1.2; margin: 0 0 6px; font-weight: 650; letter-spacing: -0.01em; }
+h2 { font-size: 18px; margin: 0 0 4px; font-weight: 630; }
+h3 { font-size: 14px; font-weight: 620; margin: 0; }
+p { margin: 0; }
+.sub { color: var(--text-secondary); max-width: 76ch; }
+.meta { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+section { margin-top: 40px; }
+.section-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 24px; margin-bottom: 14px; }
+.section-head p { color: var(--text-secondary); font-size: 14px; max-width: 70ch; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+
+/* Scoreboard */
+.score { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 28px; }
+@media (min-width: 900px) { .score { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); } }
+.hero-card { padding: 22px 24px; display: flex; flex-direction: column; justify-content: center; }
+.hero-label { color: var(--text-secondary); font-size: 14px; }
+.hero-value { font-size: 56px; line-height: 1.05; font-weight: 650; letter-spacing: -0.02em; margin: 6px 0 8px; }
+.hero-note { color: var(--text-secondary); font-size: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; }
+.tile { padding: 12px 14px; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; align-items: center; }
+.badge { grid-row: span 2; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 15px; background: var(--wash); color: var(--text-secondary); border: 1px solid var(--border); }
+.badge.first { background: var(--kestro); color: #fff; border-color: transparent; }
+.tile-label { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.tile-detail { color: var(--text-muted); font-size: 12.5px; }
+.tile-detail .good { color: var(--good); font-weight: 600; }
+.tile-detail .bad { color: var(--bad); font-weight: 600; }
+
+/* Leaderboard table */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: right; padding: 9px 12px; border-bottom: 1px solid var(--grid); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 190px; }
+thead th { color: var(--text-secondary); font-weight: 600; font-size: 12.5px; vertical-align: bottom; }
+thead th .ver { display: block; color: var(--text-muted); font-weight: 400; }
+tbody tr:hover { background: var(--wash); }
+.col-kestro { background: var(--highlight); }
+td.win { font-weight: 700; }
+td.win::before { content: "#1 "; color: var(--text-muted); font-weight: 600; font-size: 11.5px; }
+.rank-cell { font-weight: 650; }
+.lb-note { color: var(--text-muted); font-size: 12.5px; padding: 10px 12px 12px; }
+
+/* Panels */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend svg { flex: none; }
+.panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr)); gap: 12px; }
+.panel { padding: 14px 14px 10px; position: relative; min-width: 0; }
+.panel .desc { color: var(--text-muted); font-size: 12.5px; margin: 1px 0 6px; }
+.panel svg { display: block; width: 100%; height: auto; overflow: visible; }
+.panel:focus-within { outline: 2px solid var(--kestro); outline-offset: 2px; }
+.panel svg:focus { outline: none; }
+.axis-text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.bar-name { fill: var(--text-secondary); font-size: 11.5px; }
+.bar-name.kestro { fill: var(--text-primary); font-weight: 650; }
+.bar-value { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.end-label { fill: var(--text-secondary); font-size: 11px; }
+.grid-line { stroke: var(--grid); stroke-width: 1; }
+.base-line { stroke: var(--axis); stroke-width: 1; }
+.cross { stroke: var(--axis); stroke-width: 1; }
+.row-hit:hover + .row-hl, .row-hl.on { opacity: 1; }
+.row-hl { fill: var(--wash); opacity: 0; pointer-events: none; }
+.series-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+
+/* Tooltip */
+.tooltip { position: fixed; z-index: 10; pointer-events: none; min-width: 200px; max-width: min(320px, calc(100vw - 32px));
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14); padding: 10px 12px; font-size: 13px; opacity: 0; transition: opacity 80ms; }
+.tooltip.on { opacity: 1; }
+.tooltip .t-title { font-weight: 620; margin-bottom: 2px; }
+.tooltip .t-sub { color: var(--text-muted); font-size: 12px; margin-bottom: 6px; }
+.tooltip .row { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.tooltip .row .k { display: inline-flex; align-items: center; gap: 7px; color: var(--text-secondary); }
+.tooltip .foot { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-secondary); }
+
+/* Methodology, runs, data */
+.method td:first-child { min-width: 170px; }
+.method td { white-space: normal; text-align: left; }
+.method th { text-align: left; }
+.runs { display: grid; gap: 8px; }
+.run { padding: 12px 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; align-items: baseline; }
+.run-num { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 13px; grid-row: span 3; }
+.run-label { font-weight: 600; overflow-wrap: anywhere; }
+.run-meta, .run-note { font-size: 12.5px; overflow-wrap: anywhere; }
+.run-meta { color: var(--text-muted); }
+.run-note { color: var(--text-secondary); }
+details.card summary { cursor: pointer; padding: 14px 16px; font-weight: 600; }
+details summary:focus-visible { outline: 2px solid var(--kestro); outline-offset: 2px; border-radius: 10px; }
+details .table-wrap { padding: 0 16px 16px; }
+code { font: 13px ui-monospace, "Cascadia Mono", Consolas, monospace; background: var(--wash); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+footer { margin-top: 40px; color: var(--text-secondary); font-size: 14px; }
+footer p + p { margin-top: 6px; }
+footer a { color: inherit; }
+.empty { padding: 24px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>KestroDB benchmark tracker</h1>
+    <p class="sub">KestroDB against other embedded databases on the same machine, with the same JSON documents and matched durability: every acknowledged write was flushed to disk. Higher is better everywhere.</p>
+    <p class="meta" id="meta"></p>
+  </header>
+  <div id="app"></div>
+  <footer>
+    <p>Record a new run: <code>node bench/compare.mjs --runs 3 --record "what changed"</code>, then reload this page. Install the other databases once with <code>cd bench/competitors &amp;&amp; npm install</code>.</p>
+    <p>Data: <code>results/bench-history.json</code>. Each value is the median of the run's repetitions. Results describe this machine only; run the benchmark on your own hardware before relying on them.</p>
+    <p>KestroDB is licensed under the Apache License 2.0. Source: <a href="https://github.com/HimasRafeek/kestrodb">github.com/HimasRafeek/kestrodb</a>.</p>
+  </footer>
+</main>
+<div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
+<script src="results/bench-history.js"></script>
+<script src="results/lang-results.js"></script>
+<script>
+(() => {
+  const history = window.KESTRO_BENCH_HISTORY;
+  const app = document.getElementById('app');
+  if (!Array.isArray(history) || !history.length) {
+    app.innerHTML = '<div class="card empty" style="margin-top:28px">No benchmark runs recorded yet. Run <code>node bench/compare.mjs --runs 3 --record "baseline"</code> and reload.</div>';
+    return;
+  }
+
+  // ---------- Vocabulary ----------
+  const PHASES = [
+    {id: 'write-awaited', title: 'Durable writes, one at a time', short: 'Writes, one at a time', desc: 'Each write awaited before the next. Bound by the disk flush.'},
+    {id: 'write-inflight', title: 'Durable writes, 256 in flight', short: 'Writes, 256 in flight', desc: 'A busy server: many single writes outstanding at once.'},
+    {id: 'bulk-load', title: 'Bulk load', short: 'Bulk load', desc: 'Transactions of 1,000 writes.'},
+    {id: 'read-awaited', title: 'Point reads, one at a time', short: 'Reads, one at a time', desc: 'Each read awaited before the next.'},
+    {id: 'read-inflight', title: 'Point reads, 256 in flight', short: 'Reads, 256 in flight', desc: 'Many reads outstanding at once.'},
+    {id: 'read-many', title: 'Multi-key reads', short: 'Multi-key reads', desc: '100 keys per call.'},
+    {id: 'mixed', title: 'Mixed workload', short: 'Mixed 95/5', desc: '95% reads, 5% durable writes, 256 in flight.'},
+    {id: 'open', title: 'Open an existing database', short: 'Open existing DB', desc: 'Ten closes and reopens of a 20,000-key database, reading one key each time. Keys per second. Runs before run 6 timed a single reopen.'},
+  ];
+  const FALLBACK = {inProcess: 'KestroDB in-process', worker: 'KestroDB worker', sqlite: 'SQLite (node:sqlite)', betterSqlite3: 'SQLite (better-sqlite3)', lmdb: 'LMDB (lmdb-js)', leveldb: 'LevelDB (classic-level)'};
+  const latest = history[history.length - 1], first = history[0];
+  const engines = (latest.engines ?? Object.keys(FALLBACK).filter(id => latest.results.some(r => r[id] !== undefined)).map(id => ({id, name: FALLBACK[id], kind: id === 'inProcess' || id === 'worker' ? 'kestro' : 'other'})))
+    .filter(e => latest.results.some(r => r[e.id] !== undefined));
+  const isKestro = id => id === 'inProcess' || id === 'worker';
+  const nameOf = id => engines.find(e => e.id === id)?.name ?? FALLBACK[id] ?? id;
+  const phases = PHASES.filter(p => latest.results.some(r => r.id === p.id));
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  const compact = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M'
+    : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, '') + 'K' : String(Math.round(n));
+  const full = n => Math.round(n).toLocaleString('en-US');
+  const times = r => (r >= 10 ? r.toFixed(1) : r.toFixed(2)) + '×';
+  const date = iso => new Date(iso).toLocaleString(undefined, {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+  const rowOf = (run, id) => run.results.find(r => r.id === id) ?? {};
+  const unitOf = r => r.unit === 'keys/s' ? 'keys/s' : 'ops/s';
+  // Engines ranked by throughput for one benchmark row.
+  const ranking = r => engines.filter(e => r[e.id] !== undefined).map(e => ({id: e.id, v: r[e.id]})).sort((a, b) => b.v - a.v);
+  const kestroRank = r => { const rk = ranking(r); const i = rk.findIndex(x => isKestro(x.id)); return {rank: i + 1, ranked: rk, best: rk[i]}; };
+
+  document.getElementById('meta').textContent =
+    `${history.length} recorded run${history.length === 1 ? '' : 's'} · latest ${date(latest.date)} · ${latest.cpu}${latest.cores ? `, ${latest.cores} threads` : ''}, ${latest.platform} ${latest.arch}, Node ${latest.node}`;
+
+  // ---------- 1. Scoreboard ----------
+  const standings = phases.map(p => ({p, ...kestroRank(rowOf(latest, p.id))}));
+  const wins = standings.filter(s => s.rank === 1).length;
+  const tiles = standings.map(({p, rank, ranked, best}) => {
+    const leader = ranked[0], next = ranked.find(x => !isKestro(x.id));
+    const detail = rank === 1
+      ? `<span class="good">${times(best.v / next.v)} ahead</span> of ${esc(nameOf(next.id))}`
+      : `<span class="bad">${times(leader.v / best.v)} behind</span> ${esc(nameOf(leader.id))}`;
+    return `<div class="card tile"><div class="badge ${rank === 1 ? 'first' : ''}" aria-label="Rank ${rank}">#${rank}</div>
+      <div class="tile-label">${esc(p.short)}</div><div class="tile-detail">${detail}</div></div>`;
+  }).join('');
+  app.insertAdjacentHTML('beforeend', `
+    <div class="score">
+      <div class="card hero-card">
+        <div class="hero-label">KestroDB ranks first in</div>
+        <div class="hero-value">${wins} of ${phases.length}</div>
+        <div class="hero-note">benchmarks in the latest run, against ${engines.filter(e => !isKestro(e.id)).length} other database configurations. Each tile shows KestroDB's best engine and the gap to the nearest rival.</div>
+      </div>
+      <div class="tiles" aria-label="KestroDB rank per benchmark">${tiles}</div>
+    </div>`);
+
+  // ---------- 2. Leaderboard table ----------
+  const versionOf = e => e.version ? (e.kind === 'kestro' ? 'v' + e.version : e.version) : '';
+  const lbRows = phases.map(p => {
+    const r = rowOf(latest, p.id), rk = ranking(r), top = rk[0]?.id, hr = kestroRank(r).rank;
+    return `<tr><td>${esc(p.title)}<br><span class="tile-detail">${esc(unitOf(r))}</span></td>
+      ${engines.map(e => `<td class="${isKestro(e.id) ? 'col-kestro' : ''} ${e.id === top ? 'win' : ''}">${r[e.id] === undefined ? '—' : full(r[e.id])}</td>`).join('')}
+      <td class="rank-cell">#${hr}</td></tr>`;
+  }).join('');
+  app.insertAdjacentHTML('beforeend', `
+    <section aria-labelledby="lb-h">
+      <div class="section-head"><div><h2 id="lb-h">Leaderboard</h2><p>Latest run, operations per second (the last row: keys loaded per second). The fastest database in each row is marked #1. KestroDB columns are tinted.</p></div></div>
+      <div class="card"><div class="table-wrap"><table>
+        <thead><tr><th>Benchmark</th>${engines.map(e => `<th class="${isKestro(e.id) ? 'col-kestro' : ''}">${esc(e.name)}<span class="ver">${esc(versionOf(e))}</span></th>`).join('')}<th>KestroDB rank</th></tr></thead>
+        <tbody>${lbRows}</tbody>
+      </table></div>
+      <p class="lb-note">${esc(latest.keys.toLocaleString('en-US'))} keys, ~230-byte JSON documents, median of ${latest.runs ?? 1} repetition${(latest.runs ?? 1) === 1 ? '' : 's'}. Synchronous engines (both SQLite bindings) cannot overlap requests, so their "in flight" rows run requests one after another. KestroDB runs with <code>jsonValidation: 'basic'</code> (plain <code>JSON.stringify</code>, as the other engines do); its default strict mode rejects values JSON would silently change and costs more per write.</p></div>
+    </section>`);
+
+  // ---------- 2b. PHP and Python, many processes (results/lang-results.js) ----------
+  const langSets = window.KESTRO_LANG_RESULTS;
+  if (Array.isArray(langSets) && langSets.length) {
+    const LANG_ENGINES = ['KestroDB', 'SQLite', 'MySQL'];
+    const cards = langSets.map(set => {
+      const cols = LANG_ENGINES.filter(n => set.rows.some(r => r[n]));
+      const body = set.rows.flatMap(r => ['writes', 'reads'].map(k => {
+        const order = cols.filter(n => r[n]).sort((a, b) => r[b][k] - r[a][k]);
+        return `<tr><td>${r.workers} process${r.workers === 1 ? '' : 'es'}<br><span class="tile-detail">${k === 'writes' ? 'durable writes/s' : 'point reads/s'}</span></td>
+          ${cols.map(n => `<td class="${n === 'KestroDB' ? 'col-kestro' : ''} ${n === order[0] ? 'win' : ''}">${r[n] ? full(r[n][k]) : '—'}</td>`).join('')}
+          <td class="rank-cell">#${order.indexOf('KestroDB') + 1}</td></tr>`;
+      })).join('');
+      return `<div class="card"><h3 style="padding:14px 12px 0">${esc(set.title)}</h3><div class="table-wrap"><table>
+        <thead><tr><th>Processes</th>${cols.map(n => `<th class="${n === 'KestroDB' ? 'col-kestro' : ''}">${esc(n)}</th>`).join('')}<th>KestroDB rank</th></tr></thead>
+        <tbody>${body}</tbody></table></div><p class="lb-note">${esc(set.note)}</p></div>`;
+    }).join('');
+    app.insertAdjacentHTML('beforeend', `
+      <section aria-labelledby="lang-h">
+        <div class="section-head"><div><h2 id="lang-h">PHP and Python, many processes</h2><p>N application processes at once, as PHP-FPM or gunicorn workers run. KestroDB writes through kestro-server (one group commit for all of them) and reads the file in-process through its C library. SQLite: WAL, synchronous=FULL. MySQL 8.0: InnoDB, innodb_flush_log_at_trx_commit=1. Source: <code>bench/lang-compare.mjs</code>.</p></div></div>
+        <div class="panels" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,540px),1fr))">${cards}</div>
+      </section>`);
+  }
+
+  // ---------- Shared chart helpers ----------
+  const tip = document.getElementById('tooltip');
+  function placeTip(anchor, fallbackRect) {
+    tip.classList.add('on');
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let x = anchor ? anchor.x + 14 : fallbackRect.right - tw;
+    let y = anchor ? anchor.y - th - 12 : fallbackRect.top - th - 8;
+    if (x + tw > innerWidth - 8) x = (anchor ? anchor.x - 14 : fallbackRect.right) - tw;
+    if (y < 8) y = anchor ? anchor.y + 16 : fallbackRect.bottom + 8;
+    tip.style.left = Math.max(8, x) + 'px';
+    tip.style.top = Math.max(8, Math.min(y, innerHeight - th - 8)) + 'px';
+  }
+  const hideTip = () => tip.classList.remove('on');
+  addEventListener('scroll', hideTip, {passive: true});
+  // Clean axis ticks: steps of 1, 2 or 5 × 10^k.
+  function ticks(max, count = 4) {
+    const raw = max / count, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= raw);
+    const top = Math.ceil(max / step) * step;
+    return {top, values: Array.from({length: Math.round(top / step) + 1}, (_, i) => i * step)};
+  }
+  // Horizontal bar with a 4px rounded data end and a square baseline.
+  const bar = (x, y, w, h, r = 4) => w <= r ? `M${x} ${y}h${w}v${h}h${-w}Z`
+    : `M${x} ${y}H${x + w - r}Q${x + w} ${y} ${x + w} ${y + r}V${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}H${x}Z`;
+
+  // ---------- 3. Ranked bars ----------
+  const swatch = color => `<svg width="14" height="10" aria-hidden="true"><rect width="14" height="10" rx="2" fill="${color}"/></svg>`;
+  app.insertAdjacentHTML('beforeend', `
+    <section aria-labelledby="bars-h">
+      <div class="section-head">
+        <div><h2 id="bars-h">How each database ranks</h2><p>Latest run, fastest first. Hover or focus a chart and use the arrow keys for exact values.</p></div>
+        <div class="legend"><span>${swatch('var(--kestro)')}KestroDB</span><span>${swatch('var(--other)')}Other databases</span></div>
+      </div>
+      <div class="panels" id="bars"></div>
+    </section>`);
+  const barsEl = document.getElementById('bars');
+  for (const p of phases) {
+    const r = rowOf(latest, p.id), rk = ranking(r);
+    const W = 380, L = 148, R = 52, rowH = 30, barH = 18, top = 4;
+    const H = top + rk.length * rowH + 4, iw = W - L - R, max = rk[0].v;
+    let svg = '';
+    rk.forEach((x, i) => {
+      const y = top + i * rowH, w = Math.max(2, (x.v / max) * iw), him = isKestro(x.id);
+      svg += `<rect class="row-hit" data-i="${i}" x="0" y="${y}" width="${W}" height="${rowH}" fill="transparent"/>`;
+      svg += `<rect class="row-hl" id="hl-${p.id}-${i}" x="0" y="${y}" width="${W}" height="${rowH}" rx="6"/>`;
+      svg += `<text class="bar-name ${him ? 'kestro' : ''}" x="${L - 10}" y="${y + rowH / 2 + 4}" text-anchor="end">${i + 1}. ${esc(nameOf(x.id))}</text>`;
+      svg += `<path d="${bar(L, y + (rowH - barH) / 2, w, barH)}" fill="${him ? 'var(--kestro)' : 'var(--other)'}" pointer-events="none"/>`;
+      svg += `<text class="bar-value" x="${L + w + 6}" y="${y + rowH / 2 + 4}" pointer-events="none">${compact(x.v)}</text>`;
+    });
+    svg += `<line class="base-line" x1="${L}" x2="${L}" y1="${top}" y2="${H - 4}"/>`;
+    const card = document.createElement('div');
+    card.className = 'card panel';
+    const label = `${p.title}, ${unitOf(r)}: ` + rk.map((x, i) => `${i + 1}. ${nameOf(x.id)} ${full(x.v)}`).join('; ');
+    card.innerHTML = `<h3>${esc(p.title)}</h3><p class="desc">${esc(p.desc)}</p><svg viewBox="0 0 ${W} ${H}" role="img" tabindex="0" aria-label="${esc(label)}">${svg}</svg>`;
+    barsEl.appendChild(card);
+    const el = card.querySelector('svg');
+    let cur = -1;
+    const show = (i, anchor) => {
+      if (cur >= 0) el.querySelector(`#hl-${p.id}-${cur}`)?.classList.remove('on');
+      cur = i; el.querySelector(`#hl-${p.id}-${i}`).classList.add('on');
+      const x = rk[i], leader = rk[0];
+      tip.innerHTML = `<div class="t-title">${i + 1}. ${esc(nameOf(x.id))}</div><div class="t-sub">${esc(p.title)}</div>
+        <div class="row"><span class="k">Throughput</span><span>${full(x.v)} ${esc(unitOf(r))}</span></div>
+        <div class="foot">${i === 0 ? (rk[1] ? `Fastest: ${times(x.v / rk[1].v)} ahead of ${esc(nameOf(rk[1].id))}` : 'Fastest') : `${times(leader.v / x.v)} behind ${esc(nameOf(leader.id))}`}</div>`;
+      const box = el.getBoundingClientRect();
+      placeTip(anchor, {right: box.right, top: box.top + ((top + i * rowH) / H) * box.height, bottom: box.top + ((top + (i + 1) * rowH) / H) * box.height});
+    };
+    const hide = () => { if (cur >= 0) el.querySelector(`#hl-${p.id}-${cur}`)?.classList.remove('on'); cur = -1; hideTip(); };
+    el.addEventListener('pointermove', ev => { const t = ev.target.closest('.row-hit'); if (t) show(+t.dataset.i, {x: ev.clientX, y: ev.clientY}); });
+    el.addEventListener('pointerleave', hide);
+    el.addEventListener('focus', () => show(0));
+    el.addEventListener('blur', hide);
+    el.addEventListener('keydown', ev => {
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp' || ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+        ev.preventDefault(); const d = ev.key === 'ArrowDown' || ev.key === 'ArrowRight' ? 1 : -1;
+        show(Math.max(0, Math.min(rk.length - 1, (cur < 0 ? 0 : cur) + d)));
+      } else if (ev.key === 'Escape') hide();
+    });
+  }
+
+  // ---------- 4. Progress across versions ----------
+  const TREND = [
+    {key: 'inProcess', name: 'KestroDB in-process', short: 'In-process', color: 'var(--s-inproc)', shape: 'circle'},
+    {key: 'worker', name: 'KestroDB worker', short: 'Worker', color: 'var(--s-worker)', shape: 'square'},
+    {key: 'sqlite', name: 'SQLite (node:sqlite)', short: 'SQLite', color: 'var(--s-sqlite)', shape: 'diamond'},
+  ];
+  function marker(shape, x, y, r, color) {
+    const common = `fill="${color}" stroke="var(--surface-1)" stroke-width="2"`;
+    if (shape === 'square') return `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" rx="1.5" ${common}/>`;
+    if (shape === 'diamond') { const d = r * 1.3; return `<path d="M${x} ${y - d}L${x + d} ${y}L${x} ${y + d}L${x - d} ${y}Z" ${common}/>`; }
+    return `<circle cx="${x}" cy="${y}" r="${r}" ${common}/>`;
+  }
+  const lineKey = e => `<svg width="22" height="12" aria-hidden="true"><line x1="1" y1="6" x2="21" y2="6" stroke="${e.color}" stroke-width="2" stroke-linecap="round"/>${marker(e.shape, 11, 6, 4, e.color)}</svg>`;
+  if (history.length > 1) {
+    app.insertAdjacentHTML('beforeend', `
+      <section aria-labelledby="trend-h">
+        <div class="section-head">
+          <div><h2 id="trend-h">Progress across versions</h2><p>KestroDB's two engines and SQLite over every recorded run. Run numbers match the list below. A line starts at the first run that measured it.</p></div>
+          <div class="legend">${TREND.map(e => `<span>${lineKey(e)}${esc(e.name)}</span>`).join('')}</div>
+        </div>
+        <div class="panels" id="trend"></div>
+      </section>`);
+    const trendEl = document.getElementById('trend');
+    const W = 380, H = 210, M = {top: 10, right: 74, bottom: 26, left: 46};
+    const iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+    const xAt = i => M.left + (i * iw) / (history.length - 1);
+    for (const p of phases) {
+      const values = history.map(run => rowOf(run, p.id));
+      const peak = Math.max(1, ...values.flatMap(v => TREND.map(e => v[e.key] ?? 0)));
+      const {top, values: tv} = ticks(peak);
+      const y = v => M.top + ih - (v / top) * ih;
+      let svg = '';
+      tv.forEach((v, t) => {
+        svg += `<line class="${t ? 'grid-line' : 'base-line'}" x1="${M.left}" x2="${M.left + iw}" y1="${y(v)}" y2="${y(v)}"/>`;
+        svg += `<text class="axis-text" x="${M.left - 8}" y="${y(v) + 4}" text-anchor="end">${t ? compact(v) : '0'}</text>`;
+      });
+      history.forEach((_, i) => { svg += `<text class="axis-text" x="${xAt(i)}" y="${H - 6}" text-anchor="middle">Run ${i + 1}</text>`; });
+      svg += `<line class="cross" x1="0" x2="0" y1="${M.top}" y2="${M.top + ih}" visibility="hidden"/>`;
+      const ends = [];
+      for (const e of TREND) {
+        const pts = values.map((v, i) => v[e.key] === undefined ? null : [xAt(i), y(v[e.key])]);
+        let d = '', pen = false;
+        for (const pt of pts) { if (!pt) { pen = false; continue; } d += (pen ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1); pen = true; }
+        if (d) svg += `<path class="series-line" d="${d}" stroke="${e.color}"/>`;
+        pts.forEach(pt => { if (pt) svg += marker(e.shape, pt[0], pt[1], 4, e.color); });
+        const last = pts[pts.length - 1];
+        if (last) ends.push({e, x: last[0], y: last[1]});
+      }
+      ends.sort((a, b) => a.y - b.y);
+      if (ends.every((a, i) => i === 0 || a.y - ends[i - 1].y >= 13))
+        for (const {e, x, y: yy} of ends) svg += `<text class="end-label" x="${x + 10}" y="${yy + 4}">${esc(e.short)}</text>`;
+      svg += `<g class="hl"></g>`;
+      const card = document.createElement('div');
+      card.className = 'card panel';
+      const lastRow = values[values.length - 1];
+      const label = `${p.title} across ${history.length} runs. Latest: ` + TREND.filter(e => lastRow[e.key] !== undefined).map(e => `${e.name} ${full(lastRow[e.key])}`).join(', ');
+      card.innerHTML = `<h3>${esc(p.title)}</h3><p class="desc">${esc(unitOf(lastRow))}</p><svg viewBox="0 0 ${W} ${H}" role="img" tabindex="0" aria-label="${esc(label)}">${svg}</svg>`;
+      trendEl.appendChild(card);
+      const el = card.querySelector('svg'), cross = el.querySelector('.cross'), hl = el.querySelector('.hl');
+      let cur = -1;
+      const show = (i, anchor) => {
+        cur = i; const v = values[i], run = history[i], x = xAt(i);
+        cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible');
+        hl.innerHTML = TREND.filter(e => v[e.key] !== undefined).map(e => marker(e.shape, x, y(v[e.key]), 5.5, e.color)).join('');
+        tip.innerHTML = `<div class="t-title">Run ${i + 1}: ${esc(run.label ?? 'unlabelled')}</div><div class="t-sub">${esc(p.title)} · ${esc(date(run.date))}</div>
+          ${TREND.map(e => `<div class="row"><span class="k">${lineKey(e)}${esc(e.name)}</span><span>${v[e.key] === undefined ? 'not measured' : full(v[e.key])}</span></div>`).join('')}`;
+        const box = el.getBoundingClientRect(), px = box.left + (x / W) * box.width;
+        placeTip(anchor, {right: px + 160, top: box.top + 10, bottom: box.top + 10});
+      };
+      const hide = () => { cur = -1; cross.setAttribute('visibility', 'hidden'); hl.innerHTML = ''; hideTip(); };
+      el.addEventListener('pointermove', ev => {
+        const box = el.getBoundingClientRect(), sx = ((ev.clientX - box.left) / box.width) * W;
+        let best = 0; history.forEach((_, k) => { if (Math.abs(xAt(k) - sx) < Math.abs(xAt(best) - sx)) best = k; });
+        show(best, {x: ev.clientX, y: ev.clientY});
+      });
+      el.addEventListener('pointerleave', hide);
+      el.addEventListener('focus', () => show(history.length - 1));
+      el.addEventListener('blur', hide);
+      el.addEventListener('keydown', ev => {
+        if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') { ev.preventDefault(); show(Math.max(0, Math.min(history.length - 1, (cur < 0 ? history.length - 1 : cur) + (ev.key === 'ArrowRight' ? 1 : -1)))); }
+        else if (ev.key === 'Escape') hide();
+      });
+    }
+  }
+
+  // ---------- 5. Methodology ----------
+  if (latest.engines) app.insertAdjacentHTML('beforeend', `
+    <section aria-labelledby="method-h">
+      <div class="section-head"><div><h2 id="method-h">How the databases were configured</h2><p>Every engine stores the same JSON text and parses it on read, and acknowledges a write only after asking the OS to make it durable.</p></div></div>
+      <div class="card"><div class="table-wrap"><table class="method">
+        <thead><tr><th>Database</th><th>Version</th><th>Durability setting</th></tr></thead>
+        <tbody>${latest.engines.map(e => `<tr><td>${esc(e.name)}</td><td>${esc(e.version ?? '—')}</td><td>${esc(e.durability ?? '')}</td></tr>`).join('')}</tbody>
+      </table></div></div>
+    </section>`);
+
+  // ---------- 6. Runs + full data ----------
+  app.insertAdjacentHTML('beforeend', `
+    <section aria-labelledby="runs-h">
+      <div class="section-head"><div><h2 id="runs-h">Recorded runs</h2><p>Oldest first.</p></div></div>
+      <div class="runs">${history.map((run, i) => `
+        <div class="card run">
+          <span class="run-num">Run ${i + 1}</span>
+          <span class="run-label">${esc(run.label ?? 'unlabelled')}</span>
+          <span class="run-meta">${esc(date(run.date))} · ${esc(run.kestro?.readMode ?? '')} reads · ${esc(run.kestro?.fileSync ?? '')} · ${(run.engines?.length ?? 3)} engines · median of ${run.runs ?? 1}</span>
+          ${run.note ? `<span class="run-note">${esc(run.note)}</span>` : ''}
+        </div>`).join('')}
+      </div>
+    </section>`);
+  const allIds = Object.keys(FALLBACK).filter(id => history.some(run => run.results.some(r => r[id] !== undefined)));
+  const dataRows = phases.flatMap(p => history.map((run, i) => {
+    const r = rowOf(run, p.id);
+    if (!allIds.some(id => r[id] !== undefined)) return '';
+    return `<tr><td>${esc(p.title)}</td><td>Run ${i + 1}</td>${allIds.map(id => `<td>${r[id] === undefined ? '—' : full(r[id])}</td>`).join('')}</tr>`;
+  })).join('');
+  app.insertAdjacentHTML('beforeend', `
+    <section aria-labelledby="data-h">
+      <details class="card">
+        <summary id="data-h">Table view: every benchmark, run and database</summary>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Benchmark</th><th>Run</th>${allIds.map(id => `<th>${esc(nameOf(id))}</th>`).join('')}</tr></thead>
+          <tbody>${dataRows}</tbody>
+        </table></div>
+      </details>
+    </section>`);
+})();
+</script>
+</body>
+</html>

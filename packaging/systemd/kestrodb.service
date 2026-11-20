@@ -1,0 +1,67 @@
+# KestroDB server as a systemd service (packaging/install.sh installs it with the release in
+# /opt/kestrodb). Settings: /etc/kestrodb/kestrodb.env (see the defaults below).
+#   systemctl status kestrodb        journalctl -u kestrodb
+# kestro-server stops cleanly on SIGTERM: it stops accepting, ends every connection (forcibly
+# after 2 s), writes the index snapshot, prints "KESTRODB STOPPED" and exits 0. A big database
+# takes a moment to write its snapshot, hence the generous TimeoutStopSec.
+[Unit]
+Description=KestroDB database server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kestrodb
+Group=kestrodb
+# Defaults; /etc/kestrodb/kestrodb.env overrides them. KESTRODB_AUTH is --token-file FILE or
+# --users FILE; KESTRODB_OPTS takes any other options (--unix /run/kestrodb/kestro.sock,
+# --backup-dir /var/lib/kestrodb/backups --backup-every 1h, --tls-cert/--tls-key, --cluster ...).
+Environment=KESTRODB_DB=/var/lib/kestrodb/kestro.kdb
+Environment=KESTRODB_LISTEN=127.0.0.1:7820
+Environment="KESTRODB_AUTH=--token-file /etc/kestrodb/token"
+Environment=KESTRODB_OPTS=
+EnvironmentFile=-/etc/kestrodb/kestrodb.env
+ExecStart=/opt/kestrodb/bin/kestro-server --db ${KESTRODB_DB} --create --tcp ${KESTRODB_LISTEN} $KESTRODB_AUTH $KESTRODB_OPTS
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=2s
+LimitNOFILE=65536
+UMask=0077
+
+# The database lives in /var/lib/kestrodb (created and owned by the service user); a Unix
+# socket can go in /run/kestrodb; /etc/kestrodb is read-only to the service.
+StateDirectory=kestrodb
+StateDirectoryMode=0750
+RuntimeDirectory=kestrodb
+RuntimeDirectoryMode=0755
+ConfigurationDirectory=kestrodb
+ReadWritePaths=/var/lib/kestrodb
+
+# Hardening.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

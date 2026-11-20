@@ -1,0 +1,41 @@
+# The kestrodb Python client. `pip install ./clients/python` installs the module alone (server
+# connections; embedded mode then needs KESTRODB_LIBRARY). The release wheels from
+# `node scripts/package.mjs wheel-<platform>` also carry the C library (kestrodb_native/), so
+# embedded mode works without a build: win_amd64, manylinux_2_34_x86_64, manylinux_2_34_aarch64.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kestrodb"
+version = "0.9.0"
+description = "KestroDB client: SQL and key/value over kestro-server, or an embedded database through the C library"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.8"
+keywords = ["database", "sql", "kestrodb", "embedded", "key-value"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Database",
+]
+
+[project.urls]
+Homepage = "https://github.com/HimasRafeek/kestrodb"
+Documentation = "https://github.com/HimasRafeek/kestrodb/blob/main/CLIENTS.md"
+Source = "https://github.com/HimasRafeek/kestrodb"
+Issues = "https://github.com/HimasRafeek/kestrodb/issues"
+
+[tool.setuptools]
+py-modules = ["kestrodb"]
+include-package-data = false
+# The wheel's .dist-info and the sdist carry them (copies of the repository's LICENSE and NOTICE).
+license-files = ["LICENSE", "NOTICE"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kestrodb_native"]
+
+[tool.setuptools.package-data]
+kestrodb_native = ["*.dll", "*.so", "*.dylib", "THIRD-PARTY.md", "third-party-notices/*.txt"]

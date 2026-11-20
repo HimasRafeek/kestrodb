@@ -1,0 +1,11 @@
+# The image is built from these alone (a whitelist keeps bin/, build/, dist/ and node_modules out).
+*
+!CMakeLists.txt
+!cmake/
+!src/
+!vendor/
+!packaging/docker/
+!LICENSE
+!NOTICE
+!THIRD-PARTY.md
+!third-party-notices/

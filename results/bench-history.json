@@ -1,0 +1,1120 @@
+[
+  {
+    "date": "2026-11-15T09:32:18.150Z",
+    "label": "0.7.0 as shipped",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "himas": {
+      "keys": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "pread",
+      "commitPolicy": "single-barrier",
+      "pointChecksum": "BLAKE3-256",
+      "platform": "windows",
+      "fileSync": "FlushFileBuffers",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG"
+    },
+    "keys": 20000,
+    "durable": 300,
+    "concurrency": 256,
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "durable single writes, awaited one by one",
+        "ops": 300,
+        "worker": 3440.0632054279613,
+        "sqlite": 4271.210475286064
+      },
+      {
+        "id": "write-inflight",
+        "phase": "durable single writes, 256 in flight",
+        "ops": 1200,
+        "worker": 3890.167601387493,
+        "sqlite": 4366.678747811202
+      },
+      {
+        "id": "bulk-load",
+        "phase": "bulk load, 1000-write transactions",
+        "ops": 20000,
+        "worker": 197087.83022065953,
+        "sqlite": 322985.4188232672
+      },
+      {
+        "id": "read-awaited",
+        "phase": "point reads, awaited one by one",
+        "ops": 20000,
+        "worker": 36873.42147187267,
+        "sqlite": 251526.76747859508
+      },
+      {
+        "id": "read-inflight",
+        "phase": "point reads, 256 in flight",
+        "ops": 20000,
+        "worker": 243125.03191016047,
+        "sqlite": 251526.76747859508
+      },
+      {
+        "id": "read-many",
+        "phase": "multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "worker": 220755.42506457097,
+        "sqlite": 229492.54608210325
+      }
+    ]
+  },
+  {
+    "date": "2026-11-15T09:36:00.000Z",
+    "label": "Worker group commit + pipelining",
+    "note": "Values transcribed from the console output of that run (rounded to 0.1k); the JSON was not saved.",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "himas": {
+      "keys": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "pread",
+      "commitPolicy": "single-barrier",
+      "pointChecksum": "BLAKE3-256",
+      "platform": "windows",
+      "fileSync": "FlushFileBuffers",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG",
+      "groupCommit": true
+    },
+    "keys": 20000,
+    "durable": 300,
+    "concurrency": 256,
+    "runs": 1,
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "durable single writes, awaited one by one",
+        "ops": 300,
+        "worker": 3300,
+        "sqlite": 3900
+      },
+      {
+        "id": "write-inflight",
+        "phase": "durable single writes, 256 in flight",
+        "ops": 1200,
+        "worker": 90600,
+        "sqlite": 4100
+      },
+      {
+        "id": "bulk-load",
+        "phase": "bulk load, 1000-write transactions",
+        "ops": 20000,
+        "worker": 202500,
+        "sqlite": 311800
+      },
+      {
+        "id": "read-awaited",
+        "phase": "point reads, awaited one by one",
+        "ops": 20000,
+        "worker": 34800,
+        "sqlite": 231500
+      },
+      {
+        "id": "read-inflight",
+        "phase": "point reads, 256 in flight",
+        "ops": 20000,
+        "worker": 198500,
+        "sqlite": 231500
+      },
+      {
+        "id": "read-many",
+        "phase": "multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "worker": 200900,
+        "sqlite": 218300
+      }
+    ]
+  },
+  {
+    "date": "2026-11-15T09:49:56.986Z",
+    "label": "0.8.0: in-process addon + async group commit",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "himas": {
+      "keys": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "pread",
+      "commitPolicy": "single-barrier",
+      "groupCommit": true,
+      "pointChecksum": "BLAKE3-256",
+      "platform": "windows",
+      "fileSync": "FlushFileBuffers",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG"
+    },
+    "keys": 20000,
+    "durable": 300,
+    "concurrency": 256,
+    "runs": 3,
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "durable single writes, awaited one by one",
+        "ops": 300,
+        "worker": 3222.386563936983,
+        "inProcess": 3493.5189401129337,
+        "sqlite": 3465.651923783383
+      },
+      {
+        "id": "write-inflight",
+        "phase": "durable single writes, 256 in flight",
+        "ops": 1200,
+        "worker": 66276.00642877263,
+        "inProcess": 205560.40906521401,
+        "sqlite": 3943.3874157963555
+      },
+      {
+        "id": "bulk-load",
+        "phase": "bulk load, 1000-write transactions",
+        "ops": 20000,
+        "worker": 209312.52348224874,
+        "inProcess": 268950.59512042935,
+        "sqlite": 337215.2428034052
+      },
+      {
+        "id": "read-awaited",
+        "phase": "point reads, awaited one by one",
+        "ops": 20000,
+        "worker": 35368.65187962279,
+        "inProcess": 259373.4316012808,
+        "sqlite": 194500.3092554917
+      },
+      {
+        "id": "read-inflight",
+        "phase": "point reads, 256 in flight",
+        "ops": 20000,
+        "worker": 203178.7312504127,
+        "inProcess": 258004.2596503268,
+        "sqlite": 225861.350492773
+      },
+      {
+        "id": "read-many",
+        "phase": "multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "worker": 209224.2800592523,
+        "inProcess": 248351.25808538566,
+        "sqlite": 228900.52212209097
+      }
+    ]
+  },
+  {
+    "date": "2026-11-15T10:08:21.264Z",
+    "label": "0.8.0: mapped reads on Windows + write-through commits, vs 5 engines",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "cores": 16,
+    "memoryGB": 32,
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "keys": 20000,
+    "durable": 300,
+    "concurrency": 256,
+    "runs": 3,
+    "himas": {
+      "keys": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "mapped",
+      "commitPolicy": "single-barrier",
+      "inProcess": true,
+      "pointChecksum": "BLAKE3-256",
+      "platform": "windows",
+      "fileSync": "WRITE_THROUGH; FlushFileBuffers when the reserve grows",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG"
+    },
+    "engines": [
+      {
+        "id": "inProcess",
+        "name": "HimasDB in-process",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; concurrent async writes share one commit"
+      },
+      {
+        "id": "worker",
+        "name": "HimasDB worker",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; queued writes share one commit"
+      },
+      {
+        "id": "sqlite",
+        "name": "SQLite (node:sqlite)",
+        "kind": "other",
+        "version": "3.53.4",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "betterSqlite3",
+        "name": "SQLite (better-sqlite3)",
+        "kind": "other",
+        "version": "13.2.0",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "lmdb",
+        "name": "LMDB (lmdb-js)",
+        "kind": "other",
+        "version": "3.5.10",
+        "durability": "noSync off, overlappingSync off: each commit synced before its promise resolves"
+      },
+      {
+        "id": "leveldb",
+        "name": "LevelDB (classic-level)",
+        "kind": "other",
+        "version": "3.0.0",
+        "durability": "sync: true on every put and batch"
+      }
+    ],
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "Durable writes, one at a time",
+        "ops": 300,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 8067.50891459735,
+        "worker": 6140.117480914469,
+        "sqlite": 3863.1566883475607,
+        "betterSqlite3": 3720.6164317304087,
+        "lmdb": 5626.279978695154,
+        "leveldb": 4082.0325256351643
+      },
+      {
+        "id": "write-inflight",
+        "phase": "Durable writes, 256 in flight",
+        "ops": 1200,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 246174.04504985025,
+        "worker": 150334.4942497056,
+        "sqlite": 4066.6538115221183,
+        "betterSqlite3": 3918.6206977626634,
+        "lmdb": 135600.88140572913,
+        "leveldb": 9425.181729285217
+      },
+      {
+        "id": "bulk-load",
+        "phase": "Bulk load, 1000-write transactions",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 302199.2550788362,
+        "worker": 290784.3180017302,
+        "sqlite": 365461.67860203603,
+        "betterSqlite3": 300580.57137360814,
+        "lmdb": 138514.13121166622,
+        "leveldb": 413478.574573962
+      },
+      {
+        "id": "read-awaited",
+        "phase": "Point reads, one at a time",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 653144.4004297691,
+        "worker": 39497.00563326043,
+        "sqlite": 224839.09951940642,
+        "betterSqlite3": 246404.0410262728,
+        "lmdb": 716322.115729001,
+        "leveldb": 52419.89911790415
+      },
+      {
+        "id": "read-inflight",
+        "phase": "Point reads, 256 in flight",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 619860.965185509,
+        "worker": 413007.2503422798,
+        "sqlite": 221050.6537573085,
+        "betterSqlite3": 231849.38136788816,
+        "lmdb": 761800.2864369077,
+        "leveldb": 200484.37023849622
+      },
+      {
+        "id": "read-many",
+        "phase": "Multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 623558.022073954,
+        "worker": 421793.21166005154,
+        "sqlite": 213313.99286464695,
+        "betterSqlite3": 259420.53235687446,
+        "lmdb": 836589.0590882852,
+        "leveldb": 403526.824445655
+      },
+      {
+        "id": "mixed",
+        "phase": "Mixed 95% reads / 5% durable writes, 256 in flight",
+        "ops": 10000,
+        "unit": "ops/s",
+        "group": "mixed",
+        "inProcess": 435784.9139978472,
+        "worker": 117581.62810577173,
+        "sqlite": 45840.45961478428,
+        "betterSqlite3": 53592.664664801996,
+        "lmdb": 208236.1564603185,
+        "leveldb": 155288.1838115174
+      },
+      {
+        "id": "open",
+        "phase": "Open an existing 20,000-key database",
+        "ops": 20000,
+        "unit": "keys/s",
+        "group": "open",
+        "inProcess": 640875.6925462952,
+        "worker": 366677.7892262732,
+        "sqlite": 6557162.060260319,
+        "betterSqlite3": 5697518.730592826,
+        "lmdb": 5131362.8899835795,
+        "leveldb": 1249843.769528809
+      }
+    ]
+  },
+  {
+    "date": "2026-11-15T10:43:16.974Z",
+    "label": "0.8.0: keyed SipHash reads, open-addressing index, parallel replay, basic JSON mode",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "cores": 16,
+    "memoryGB": 32,
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "keys": 20000,
+    "durable": 1000,
+    "concurrency": 256,
+    "runs": 3,
+    "himas": {
+      "keys": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "mapped",
+      "commitPolicy": "single-barrier",
+      "inProcess": true,
+      "pointChecksum": "keyed SipHash-2-4-128 (<=2 KiB) or keyed BLAKE3",
+      "platform": "windows",
+      "fileSync": "WRITE_THROUGH; FlushFileBuffers when the reserve grows",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG"
+    },
+    "engines": [
+      {
+        "id": "inProcess",
+        "name": "HimasDB in-process",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; concurrent async writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "worker",
+        "name": "HimasDB worker",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; queued writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "sqlite",
+        "name": "SQLite (node:sqlite)",
+        "kind": "other",
+        "version": "3.53.4",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "betterSqlite3",
+        "name": "SQLite (better-sqlite3)",
+        "kind": "other",
+        "version": "13.2.0",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "lmdb",
+        "name": "LMDB (lmdb-js)",
+        "kind": "other",
+        "version": "3.5.10",
+        "durability": "noSync off, overlappingSync off: each commit synced before its promise resolves"
+      },
+      {
+        "id": "leveldb",
+        "name": "LevelDB (classic-level)",
+        "kind": "other",
+        "version": "3.0.0",
+        "durability": "sync: true on every put and batch"
+      }
+    ],
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "Durable writes, one at a time",
+        "ops": 1000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 10128.213048987127,
+        "worker": 7226.415148878605,
+        "sqlite": 3746.9448348552796,
+        "betterSqlite3": 3708.4959045225482,
+        "lmdb": 6192.824745536832,
+        "leveldb": 3809.8735922040846
+      },
+      {
+        "id": "write-inflight",
+        "phase": "Durable writes, 256 in flight",
+        "ops": 3000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 238428.28077314343,
+        "worker": 198437.63435881492,
+        "sqlite": 3850.008296767879,
+        "betterSqlite3": 3636.9574523258525,
+        "lmdb": 122939.23113804848,
+        "leveldb": 9610.139081136162
+      },
+      {
+        "id": "bulk-load",
+        "phase": "Bulk load, 1000-write transactions",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 542217.0169388596,
+        "worker": 488200.2011384829,
+        "sqlite": 337971.4278954857,
+        "betterSqlite3": 273035.67893734516,
+        "lmdb": 128855.518173138,
+        "leveldb": 367033.7616005608
+      },
+      {
+        "id": "read-awaited",
+        "phase": "Point reads, one at a time",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 795776.0208811627,
+        "worker": 39968.14538812567,
+        "sqlite": 217218.2380777055,
+        "betterSqlite3": 240369.0145110774,
+        "lmdb": 699080.7088678388,
+        "leveldb": 49965.42392664276
+      },
+      {
+        "id": "read-inflight",
+        "phase": "Point reads, 256 in flight",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 818538.2543853187,
+        "worker": 482566.0934585753,
+        "sqlite": 209108.77838651664,
+        "betterSqlite3": 238851.60149998806,
+        "lmdb": 758359.9707273052,
+        "leveldb": 190260.19984931394
+      },
+      {
+        "id": "read-many",
+        "phase": "Multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 901961.3148792048,
+        "worker": 535347.6681593944,
+        "sqlite": 203034.76056618273,
+        "betterSqlite3": 235192.2932189358,
+        "lmdb": 739992.5260754867,
+        "leveldb": 419641.75183645723
+      },
+      {
+        "id": "mixed",
+        "phase": "Mixed 95% reads / 5% durable writes, 256 in flight",
+        "ops": 10000,
+        "unit": "ops/s",
+        "group": "mixed",
+        "inProcess": 577217.2357066582,
+        "worker": 144935.5181879582,
+        "sqlite": 41418.32926743401,
+        "betterSqlite3": 48500.32155713192,
+        "lmdb": 175984.4570527531,
+        "leveldb": 127904.55250673738
+      },
+      {
+        "id": "open",
+        "phase": "Open an existing 20,000-key database",
+        "ops": 20000,
+        "unit": "keys/s",
+        "group": "open",
+        "inProcess": 2819244.160640532,
+        "worker": 750249.4579447666,
+        "sqlite": 6279829.188646069,
+        "betterSqlite3": 4799616.030717543,
+        "lmdb": 4149119.3494180865,
+        "leveldb": 1045593.0865385118
+      }
+    ]
+  },
+  {
+    "date": "2026-11-15T11:13:41.124Z",
+    "label": "0.8.0: index snapshot (lazy mapped index), idle checkpoints, 10-reopen open benchmark",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "cores": 16,
+    "memoryGB": 32,
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "keys": 20000,
+    "durable": 1000,
+    "concurrency": 256,
+    "runs": 3,
+    "himas": {
+      "keys": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "mapped",
+      "commitPolicy": "single-barrier",
+      "inProcess": true,
+      "openedFrom": "log-replay",
+      "verification": "at-open",
+      "indexMode": "memory",
+      "pointChecksum": "keyed SipHash-2-4-128 (<=2 KiB) or keyed BLAKE3",
+      "platform": "windows",
+      "fileSync": "WRITE_THROUGH; FlushFileBuffers when the reserve grows",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG"
+    },
+    "engines": [
+      {
+        "id": "inProcess",
+        "name": "HimasDB in-process",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; concurrent async writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "worker",
+        "name": "HimasDB worker",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; queued writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "sqlite",
+        "name": "SQLite (node:sqlite)",
+        "kind": "other",
+        "version": "3.53.4",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "betterSqlite3",
+        "name": "SQLite (better-sqlite3)",
+        "kind": "other",
+        "version": "13.2.0",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "lmdb",
+        "name": "LMDB (lmdb-js)",
+        "kind": "other",
+        "version": "3.5.10",
+        "durability": "noSync off, overlappingSync off: each commit synced before its promise resolves"
+      },
+      {
+        "id": "leveldb",
+        "name": "LevelDB (classic-level)",
+        "kind": "other",
+        "version": "3.0.0",
+        "durability": "sync: true on every put and batch"
+      }
+    ],
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "Durable writes, one at a time",
+        "ops": 1000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 10403.413151786839,
+        "worker": 7174.470936576959,
+        "sqlite": 3806.2989680362234,
+        "betterSqlite3": 3693.749732203144,
+        "lmdb": 6092.753644380592,
+        "leveldb": 3880.305007494809
+      },
+      {
+        "id": "write-inflight",
+        "phase": "Durable writes, 256 in flight",
+        "ops": 3000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 194418.88196181614,
+        "worker": 170399.35929840905,
+        "sqlite": 3849.1077896447196,
+        "betterSqlite3": 3843.2295426492788,
+        "lmdb": 117051.7017366571,
+        "leveldb": 10722.74136175956
+      },
+      {
+        "id": "bulk-load",
+        "phase": "Bulk load, 1000-write transactions",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 579166.2322919925,
+        "worker": 494886.5843670277,
+        "sqlite": 342618.87590173003,
+        "betterSqlite3": 284682.5149422735,
+        "lmdb": 137777.1042008239,
+        "leveldb": 368453.0498701203
+      },
+      {
+        "id": "read-awaited",
+        "phase": "Point reads, one at a time",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 806474.3762928792,
+        "worker": 42478.36629902348,
+        "sqlite": 221599.03648738936,
+        "betterSqlite3": 239928.9810216176,
+        "lmdb": 683279.468135262,
+        "leveldb": 51943.34331770964
+      },
+      {
+        "id": "read-inflight",
+        "phase": "Point reads, 256 in flight",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 863841.3296245745,
+        "worker": 499116.5636822824,
+        "sqlite": 217924.50877091664,
+        "betterSqlite3": 241259.47094210619,
+        "lmdb": 759832.2290438272,
+        "leveldb": 200483.1644262673
+      },
+      {
+        "id": "read-many",
+        "phase": "Multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 909264.4959492267,
+        "worker": 558840.2946206033,
+        "sqlite": 208164.1999208976,
+        "betterSqlite3": 228610.0963362946,
+        "lmdb": 726469.6480981024,
+        "leveldb": 424751.9979272103
+      },
+      {
+        "id": "mixed",
+        "phase": "Mixed 95% reads / 5% durable writes, 256 in flight",
+        "ops": 10000,
+        "unit": "ops/s",
+        "group": "mixed",
+        "inProcess": 556892.0965873653,
+        "worker": 137057.0829044589,
+        "sqlite": 42552.43097782933,
+        "betterSqlite3": 51714.54399149399,
+        "lmdb": 223963.16253902556,
+        "leveldb": 145867.4298450596
+      },
+      {
+        "id": "open",
+        "phase": "Open an existing 20,000-key database",
+        "ops": 200000,
+        "unit": "keys/s",
+        "group": "open",
+        "inProcess": 18652888.399768706,
+        "worker": 1042207.8548079394,
+        "sqlite": 12454230.702169526,
+        "betterSqlite3": 10805904.346134728,
+        "lmdb": 7624740.7588142,
+        "leveldb": 3293173.087530894
+      }
+    ]
+  },
+  {
+    "date": "2026-11-15T11:50:33.122Z",
+    "label": "0.8.0: lazy snapshot sections, delayed background verification, leaner group commit, fdatasync on Linux",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "cores": 16,
+    "memoryGB": 32,
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "keys": 20000,
+    "durable": 1000,
+    "concurrency": 256,
+    "runs": 3,
+    "himas": {
+      "keys": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "mapped",
+      "commitPolicy": "single-barrier",
+      "inProcess": true,
+      "openedFrom": "log-replay",
+      "verification": "at-open",
+      "indexMode": "memory",
+      "pointChecksum": "keyed SipHash-2-4-128 (<=2 KiB) or keyed BLAKE3",
+      "platform": "windows",
+      "fileSync": "WRITE_THROUGH; FlushFileBuffers when the reserve grows",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG"
+    },
+    "engines": [
+      {
+        "id": "inProcess",
+        "name": "HimasDB in-process",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; concurrent async writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "worker",
+        "name": "HimasDB worker",
+        "kind": "himas",
+        "version": "0.8.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; queued writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "sqlite",
+        "name": "SQLite (node:sqlite)",
+        "kind": "other",
+        "version": "3.53.4",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "betterSqlite3",
+        "name": "SQLite (better-sqlite3)",
+        "kind": "other",
+        "version": "13.2.0",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "lmdb",
+        "name": "LMDB (lmdb-js)",
+        "kind": "other",
+        "version": "3.5.10",
+        "durability": "noSync off, overlappingSync off: each commit synced before its promise resolves"
+      },
+      {
+        "id": "leveldb",
+        "name": "LevelDB (classic-level)",
+        "kind": "other",
+        "version": "3.0.0",
+        "durability": "sync: true on every put and batch"
+      }
+    ],
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "Durable writes, one at a time",
+        "ops": 1000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 10537.752023511832,
+        "worker": 7863.261035890282,
+        "sqlite": 4290.856570824664,
+        "betterSqlite3": 4065.3645575013297,
+        "lmdb": 6529.54193304477,
+        "leveldb": 4369.431978212265
+      },
+      {
+        "id": "write-inflight",
+        "phase": "Durable writes, 256 in flight",
+        "ops": 3000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 243646.90690251687,
+        "worker": 257787.3254564984,
+        "sqlite": 4171.140214546768,
+        "betterSqlite3": 4168.522238024009,
+        "lmdb": 126809.14378466117,
+        "leveldb": 11963.043765200542
+      },
+      {
+        "id": "bulk-load",
+        "phase": "Bulk load, 1000-write transactions",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 537351.2880310374,
+        "worker": 458002.3312318659,
+        "sqlite": 358403.67005358136,
+        "betterSqlite3": 304088.6235884586,
+        "lmdb": 150238.4660051667,
+        "leveldb": 407592.6356162597
+      },
+      {
+        "id": "read-awaited",
+        "phase": "Point reads, one at a time",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 900596.6452774963,
+        "worker": 49186.87939992007,
+        "sqlite": 245212.8324779492,
+        "betterSqlite3": 267969.35502455937,
+        "lmdb": 774032.749325624,
+        "leveldb": 60412.228885019824
+      },
+      {
+        "id": "read-inflight",
+        "phase": "Point reads, 256 in flight",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 935331.2007781955,
+        "worker": 561780.394426015,
+        "sqlite": 229242.65105371387,
+        "betterSqlite3": 262493.7165566599,
+        "lmdb": 816876.6720444382,
+        "leveldb": 214120.84123796108
+      },
+      {
+        "id": "read-many",
+        "phase": "Multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 954321.405906295,
+        "worker": 617514.5656248167,
+        "sqlite": 235749.8081585936,
+        "betterSqlite3": 265644.81959396193,
+        "lmdb": 841807.5291265405,
+        "leveldb": 489755.5385229463
+      },
+      {
+        "id": "mixed",
+        "phase": "Mixed 95% reads / 5% durable writes, 256 in flight",
+        "ops": 10000,
+        "unit": "ops/s",
+        "group": "mixed",
+        "inProcess": 646847.2664234521,
+        "worker": 150118.59368901432,
+        "sqlite": 37796.508887660086,
+        "betterSqlite3": 50837.52276885551,
+        "lmdb": 234792.49039698715,
+        "leveldb": 109303.59401147469
+      },
+      {
+        "id": "open",
+        "phase": "Open an existing 20,000-key database",
+        "ops": 200000,
+        "unit": "keys/s",
+        "group": "open",
+        "inProcess": 31716329.152063943,
+        "worker": 1230377.0244315965,
+        "sqlite": 14713130.733523134,
+        "betterSqlite3": 13316199.822894543,
+        "lmdb": 8851163.26413199,
+        "leveldb": 3698758.326829683
+      }
+    ]
+  },
+  {
+    "date": "2026-11-19T11:57:16.703Z",
+    "label": "0.9.0: renamed to KestroDB, SQL constraints/windows/CASE/correlated subqueries",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-14400",
+    "cores": 16,
+    "memoryGB": 32,
+    "node": "v24.22.1",
+    "sqlite": "3.53.4",
+    "keys": 20000,
+    "durable": 1000,
+    "concurrency": 256,
+    "runs": 3,
+    "kestro": {
+      "keys": 0,
+      "indexMemory": 0,
+      "indexFileBytes": 0,
+      "orderedMemory": 0,
+      "orderedFileBytes": 0,
+      "bytes": 8192,
+      "txid": 0,
+      "readMode": "mapped",
+      "commitPolicy": "single-barrier",
+      "inProcess": true,
+      "openedFrom": "log-replay",
+      "verification": "at-open",
+      "indexMode": "memory",
+      "pointChecksum": "keyed SipHash-2-4-128 (<=2 KiB) or keyed BLAKE3",
+      "platform": "windows",
+      "fileSync": "WRITE_THROUGH; FlushFileBuffers when the reserve grows",
+      "namespaceSync": "MoveFileExW-write-through; no-directory-fsync",
+      "sha256Backend": "Windows CNG"
+    },
+    "engines": [
+      {
+        "id": "inProcess",
+        "name": "KestroDB in-process",
+        "kind": "kestro",
+        "version": "0.9.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; concurrent async writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "worker",
+        "name": "KestroDB worker",
+        "kind": "kestro",
+        "version": "0.9.0",
+        "durability": "Each commit durable before it returns: write-through on Windows (flush when the file grows), fsync on Linux, F_FULLFSYNC on macOS; queued writes share one commit; JSON: JSON.stringify (jsonValidation basic)"
+      },
+      {
+        "id": "sqlite",
+        "name": "SQLite (node:sqlite)",
+        "kind": "other",
+        "version": "3.53.4",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "betterSqlite3",
+        "name": "SQLite (better-sqlite3)",
+        "kind": "other",
+        "version": "13.2.0",
+        "durability": "journal_mode=WAL, synchronous=FULL: each commit synced before returning"
+      },
+      {
+        "id": "lmdb",
+        "name": "LMDB (lmdb-js)",
+        "kind": "other",
+        "version": "3.5.10",
+        "durability": "noSync off, overlappingSync off: each commit synced before its promise resolves"
+      },
+      {
+        "id": "leveldb",
+        "name": "LevelDB (classic-level)",
+        "kind": "other",
+        "version": "3.0.0",
+        "durability": "sync: true on every put and batch"
+      }
+    ],
+    "results": [
+      {
+        "id": "write-awaited",
+        "phase": "Durable writes, one at a time",
+        "ops": 1000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 20686.54505736379,
+        "worker": 10749.440222900392,
+        "sqlite": 3824.4793449431772,
+        "betterSqlite3": 3799.175578899379,
+        "lmdb": 6397.862602061903,
+        "leveldb": 4137.255948443171
+      },
+      {
+        "id": "write-inflight",
+        "phase": "Durable writes, 256 in flight",
+        "ops": 3000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 344293.33792391117,
+        "worker": 266780.4930103511,
+        "sqlite": 4168.145200394696,
+        "betterSqlite3": 4010.421749319231,
+        "lmdb": 127978.1583943007,
+        "leveldb": 10864.416428735947
+      },
+      {
+        "id": "bulk-load",
+        "phase": "Bulk load, 1000-write transactions",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "write",
+        "inProcess": 614728.2747343605,
+        "worker": 554039.641536352,
+        "sqlite": 371224.18599816615,
+        "betterSqlite3": 287899.4424827297,
+        "lmdb": 136257.6960049925,
+        "leveldb": 374465.9179844746
+      },
+      {
+        "id": "read-awaited",
+        "phase": "Point reads, one at a time",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 843358.7605999655,
+        "worker": 44570.4202611782,
+        "sqlite": 222081.57056086703,
+        "betterSqlite3": 246115.0735637955,
+        "lmdb": 722877.6312745778,
+        "leveldb": 53106.47662691028
+      },
+      {
+        "id": "read-inflight",
+        "phase": "Point reads, 256 in flight",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 881193.1355054744,
+        "worker": 510115.592193191,
+        "sqlite": 209314.93315527609,
+        "betterSqlite3": 242891.77228410565,
+        "lmdb": 729945.6555459446,
+        "leveldb": 191608.5055015592
+      },
+      {
+        "id": "read-many",
+        "phase": "Multi-key reads, 100 keys per call",
+        "ops": 20000,
+        "unit": "ops/s",
+        "group": "read",
+        "inProcess": 892004.9595475751,
+        "worker": 565543.6854219805,
+        "sqlite": 201482.91424887168,
+        "betterSqlite3": 241177.71903760443,
+        "lmdb": 743616.0561578847,
+        "leveldb": 379704.7795339124
+      },
+      {
+        "id": "mixed",
+        "phase": "Mixed 95% reads / 5% durable writes, 256 in flight",
+        "ops": 10000,
+        "unit": "ops/s",
+        "group": "mixed",
+        "inProcess": 513666.08622398926,
+        "worker": 217451.33982643034,
+        "sqlite": 42395.58814551523,
+        "betterSqlite3": 53120.31379231763,
+        "lmdb": 209726.26527855842,
+        "leveldb": 150316.26542244884
+      },
+      {
+        "id": "open",
+        "phase": "Open an existing 20,000-key database",
+        "ops": 200000,
+        "unit": "keys/s",
+        "group": "open",
+        "inProcess": 21002887.89708585,
+        "worker": 1056083.3038510077,
+        "sqlite": 13373721.973693889,
+        "betterSqlite3": 11790436.776730394,
+        "lmdb": 7691154.019204811,
+        "leveldb": 2915651.6554341186
+      }
+    ]
+  }
+]

@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance · KestroDB</title>
+<meta name="description" content="Every KestroDB benchmark with its machine, settings and caveats: Node engine comparison, SQL vs SQLite, kestro-server vs MariaDB and PostgreSQL, PHP and Python with many processes, server capacity and Linux.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="performance" class="bg-bg text-ink">
+<article id="doc">
+  <header class="doc-head">
+    <p class="eyebrow">Engine</p>
+    <h1>Performance</h1>
+    <p class="lead">All published benchmark results, with the machine, the settings and the places where KestroDB does not lead. Higher is better in every table. The raw data lives in the project&rsquo;s <code>results/</code> folder, and the <a id="tracker-link" href="../../index.html">benchmark tracker</a> charts the leaderboard and the progress across versions.</p>
+  </header>
+
+  <div class="callout callout-note" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+    <div><p><span class="callout-title">Read these numbers with their context.</span> The key/value and SQL tables come from one machine (Intel i5-14400) on 2026-11-20: Windows 10, and Ubuntu 24.04 under WSL2 on the same machine. Older tables carry their own dates; some come from a shared Linux VPS. Durability is matched: every engine acknowledges a write only after asking the OS to make it durable. Run the benchmarks on your own hardware before relying on them.</p></div>
+  </div>
+
+  <h2 id="node-engines">Node.js: KestroDB against four other engines</h2>
+  <p>One machine (Intel i5-14400, 16 threads), 2026-11-20, 0.9.0, Node 24. Every engine acknowledges a write only after asking the OS to make it durable. 20,000 keys, ~230-byte JSON documents, median of 5 runs (<code>node bench/compare.mjs --runs 5</code>).</p>
+  <h3 id="node-windows">Windows 10 (NTFS)</h3>
+  <table aria-label="Headline Node.js benchmark, Windows">
+    <thead><tr><th>Benchmark</th><th class="num">KestroDB</th><th class="num">Fastest other database</th><th class="c">KestroDB rank</th></tr></thead>
+    <tbody>
+      <tr><td>Durable writes, one at a time</td><td class="num win">23,200/s</td><td class="num">LMDB 6,600/s</td><td class="c"><strong>#1</strong> (3.5&times;)</td></tr>
+      <tr><td>Durable writes, 256 in flight</td><td class="num win">329,400/s</td><td class="num">LMDB 121,100/s</td><td class="c"><strong>#1</strong> (2.7&times;)</td></tr>
+      <tr><td>Bulk load, 1,000-write transactions</td><td class="num win">668,600/s</td><td class="num">LevelDB 387,800/s</td><td class="c"><strong>#1</strong> (1.72&times;)</td></tr>
+      <tr><td>Point reads, one at a time</td><td class="num win">923,600/s</td><td class="num">LMDB 767,900/s</td><td class="c"><strong>#1</strong> (1.20&times;)</td></tr>
+      <tr><td>Point reads, 256 in flight</td><td class="num win">943,900/s</td><td class="num">LMDB 791,600/s</td><td class="c"><strong>#1</strong> (1.19&times;)</td></tr>
+      <tr><td>Multi-key reads, 100 per call</td><td class="num win">1,010,000/s</td><td class="num">LMDB 794,600/s</td><td class="c"><strong>#1</strong> (1.27&times;)</td></tr>
+      <tr><td>Mixed: 95% reads, 5% durable writes</td><td class="num win">547,000/s</td><td class="num">LMDB 229,000/s</td><td class="c"><strong>#1</strong> (2.4&times;)</td></tr>
+      <tr><td>Open an existing 20,000-key database (&times;10)</td><td class="num win">23,270,000 keys/s</td><td class="num">SQLite 14,180,000 keys/s</td><td class="c"><strong>#1</strong> (1.64&times;)</td></tr>
+    </tbody>
+  </table>
+  <h3 id="node-linux">Linux (Ubuntu 24.04 under WSL2)</h3>
+  <p>The same machine, ext4, <code>fdatasync</code>. The virtual disk makes every flush slow, so durable writes are low for every engine.</p>
+  <table aria-label="Headline Node.js benchmark, Linux">
+    <thead><tr><th>Benchmark</th><th class="num">KestroDB</th><th class="num">Fastest other database</th><th class="c">KestroDB rank</th></tr></thead>
+    <tbody>
+      <tr><td>Durable writes, one at a time</td><td class="num win">3,200/s</td><td class="num">SQLite 1,800/s</td><td class="c"><strong>#1</strong> (1.78&times;)</td></tr>
+      <tr><td>Durable writes, 256 in flight</td><td class="num win">209,400/s</td><td class="num">LMDB 156,500/s</td><td class="c"><strong>#1</strong> (1.34&times;)</td></tr>
+      <tr><td>Bulk load, 1,000-write transactions</td><td class="num win">512,500/s</td><td class="num">LMDB 360,000/s</td><td class="c"><strong>#1</strong> (1.42&times;)</td></tr>
+      <tr><td>Point reads, one at a time</td><td class="num win">1,050,000/s</td><td class="num">LMDB 941,200/s</td><td class="c"><strong>#1</strong> (1.11&times;)</td></tr>
+      <tr><td>Point reads, 256 in flight</td><td class="num win">1,040,000/s</td><td class="num">LMDB 992,600/s</td><td class="c"><strong>#1</strong> (1.05&times;)</td></tr>
+      <tr><td>Multi-key reads, 100 per call</td><td class="num win">1,060,000/s</td><td class="num">LMDB 893,100/s</td><td class="c"><strong>#1</strong> (1.18&times;)</td></tr>
+      <tr><td>Mixed: 95% reads, 5% durable writes</td><td class="num win">523,100/s</td><td class="num">LMDB 404,500/s</td><td class="c"><strong>#1</strong> (1.29&times;)</td></tr>
+      <tr><td>Open an existing 20,000-key database (&times;10)</td><td class="num win">88,360,000 keys/s</td><td class="num">LMDB 60,780,000 keys/s</td><td class="c"><strong>#1</strong> (1.45&times;)</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">KestroDB&rsquo;s figures are its in-process addon. The read rows have the smallest margins (1.05&ndash;1.18&times; on Linux, 1.19&ndash;1.27&times; on Windows); run the benchmark on your own hardware before relying on them.</p>
+  <p><strong>Engine order.</strong> The engines alternate inside each phase and their order rotates with every phase and run: an engine that runs right after another&rsquo;s background work (LevelDB compacts on its own threads) pays for it, and with a fixed order that was always KestroDB (on Linux its mixed row measured 248K against LMDB&rsquo;s 451K that way; 574K against 361K with the rotation, 523K against 405K in the latest run). Point reads one at a time take about 22&nbsp;ms per engine, so they move the most with machine load: an earlier full run had LMDB 3% ahead there (743,400 against 722,100/s). Since then a point read&rsquo;s integrity check costs about 30&nbsp;ns less (the checksum loads its input a word at a time and computes only the half it compares), and KestroDB leads that row 1.20&times;.</p>
+  <p><strong>MVCC costs nothing measurable:</strong> the 0.9.0 build before it and this one, alternated on the same machine (five rounds each), are within a few percent on every key/value row, the new build ahead on most; point <code>SELECT</code>s became 60&ndash;75% faster with their direct path.</p>
+  <div class="callout callout-note" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+    <div><p><span class="callout-title">Since 0.8.0 (2026-11-15).</span> Durable writes got about twice as fast (one at a time: 10.5K/s in 0.8.0, 18&ndash;24K/s across runs now; Windows flush timing moves this row the most). The open row (31.7M &rarr; 21.0M keys/s) measures close + open + one read, ten times: since commits write only their group (the commit slot is written without waiting), the first close after writes flushes the slot once (about 1 ms on Windows); a reopen without writes in between takes about 0.67 ms (30M keys/s). Opening no longer lists the database&rsquo;s directory (1.55 ms &rarr; 0.70 ms with 2,000 other files). The rows move by 10&ndash;15% between single runs on this machine when other programs run (the mixed row measured 493K&ndash;578K on 2026-11-20), so changes are judged with the builds alternated.</p></div>
+  </div>
+
+  <h3 id="node-all-engines">Every engine, every workload (Windows, 2026-11-19)</h3>
+  <p>This breakdown is from an older run, the latest recorded in full: 2026-11-19, 0.9.0 before MVCC, engines in a fixed order (<code>results/bench-history.json</code>, run 8: Intel i5-14400, 16 threads, 32 GB, Windows 10, Node v24.22.1, SQLite 3.53.4). Operations/s, except the open row (keys/s). The best result in each row is bold.</p>
+  <table aria-label="All engines, Windows">
+    <thead><tr><th>Workload</th><th class="num">KestroDB in-process</th><th class="num">KestroDB worker</th><th class="num">SQLite (node:sqlite)</th><th class="num">SQLite (better-sqlite3)</th><th class="num">LMDB</th><th class="num">LevelDB</th></tr></thead>
+    <tbody>
+      <tr><td>Durable writes, one at a time</td><td class="num win">20,700</td><td class="num">10,700</td><td class="num">3,800</td><td class="num">3,800</td><td class="num">6,400</td><td class="num">4,100</td></tr>
+      <tr><td>Durable writes, 256 in flight</td><td class="num win">344,300</td><td class="num">266,800</td><td class="num">4,200</td><td class="num">4,000</td><td class="num">128,000</td><td class="num">10,900</td></tr>
+      <tr><td>Bulk load, 1,000-write transactions</td><td class="num win">614,700</td><td class="num">554,000</td><td class="num">371,200</td><td class="num">287,900</td><td class="num">136,300</td><td class="num">374,500</td></tr>
+      <tr><td>Point reads, one at a time</td><td class="num win">843,400</td><td class="num">44,600</td><td class="num">222,100</td><td class="num">246,100</td><td class="num">722,900</td><td class="num">53,100</td></tr>
+      <tr><td>Point reads, 256 in flight</td><td class="num win">881,200</td><td class="num">510,100</td><td class="num">209,300</td><td class="num">242,900</td><td class="num">729,900</td><td class="num">191,600</td></tr>
+      <tr><td>Multi-key reads, 100 keys per call</td><td class="num win">892,000</td><td class="num">565,500</td><td class="num">201,500</td><td class="num">241,200</td><td class="num">743,600</td><td class="num">379,700</td></tr>
+      <tr><td>Mixed 95% reads / 5% durable writes, 256 in flight</td><td class="num win">513,700</td><td class="num">217,500</td><td class="num">42,400</td><td class="num">53,100</td><td class="num">209,700</td><td class="num">150,300</td></tr>
+      <tr><td>Open an existing 20,000-key database (keys/s)</td><td class="num win">21,000,000</td><td class="num">1,060,000</td><td class="num">13,370,000</td><td class="num">11,790,000</td><td class="num">7,690,000</td><td class="num">2,920,000</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">Recorded medians of 2026-11-19, rounded to the nearest hundred (open row: nearest 10,000 keys/s); the tables above are the newer runs (2026-11-20, rotated engine order, median of 5). Durable writes one at a time vary the most between runs on Windows (disk flush timing): 13,800&ndash;22,900/s for KestroDB in-process across the runs of 2026-11-19.</p>
+
+  <h3 id="engine-settings">How each engine was configured</h3>
+  <table aria-label="Engine versions and durability settings">
+    <thead><tr><th>Engine</th><th>Version</th><th>Durability setting</th></tr></thead>
+    <tbody>
+      <tr><td>KestroDB in-process</td><td>0.9.0</td><td>Each commit durable before it returns: write-through on Windows (flush when the file grows), fdatasync on Linux, F_FULLFSYNC on macOS; concurrent async writes share one commit; JSON: <code>JSON.stringify</code> (<code>jsonValidation: 'basic'</code>)</td></tr>
+      <tr><td>KestroDB worker</td><td>0.9.0</td><td>As above; queued writes share one commit</td></tr>
+      <tr><td>SQLite (<code>node:sqlite</code>)</td><td>3.53.4</td><td><code>journal_mode=WAL</code>, <code>synchronous=FULL</code>: each commit synced before returning</td></tr>
+      <tr><td>SQLite (<code>better-sqlite3</code>)</td><td>13.2.0</td><td><code>journal_mode=WAL</code>, <code>synchronous=FULL</code>: each commit synced before returning</td></tr>
+      <tr><td>LMDB (<code>lmdb-js</code>)</td><td>3.5.10</td><td><code>noSync</code> off, <code>overlappingSync</code> off: each commit synced before its promise resolves</td></tr>
+      <tr><td>LevelDB (<code>classic-level</code>)</td><td>3.0.0</td><td><code>sync: true</code> on every put and batch</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><strong>JSON:</strong> the benchmark opens KestroDB with <code>jsonValidation: 'basic'</code>, the same work the other engines do (<code>JSON.stringify</code>). The strict default costs more per write: in-process bulk load measured 302,000/s strict against 519,000/s basic.</li>
+    <li><strong>Reads:</strong> KestroDB checks every value against a checksum before returning it; LMDB does not.</li>
+    <li><strong>Open:</strong> each engine closes and reopens its database ten times and reads one key each time (one ~3 ms reopen was too noisy to rank). Runs recorded before run 6 in the tracker timed a single reopen.</li>
+  </ul>
+
+  <h2 id="sql-vs-sqlite">SQL: KestroDB against SQLite</h2>
+  <p>SQLite in WAL with <code>synchronous=FULL</code> and prepared statements, both in-process from Node, 20,000 rows with a unique and two normal indexes, one i5-14400 machine, 2026-11-20 (0.9.0 with MVCC): Windows 10, and Ubuntu 24.04 under WSL2. Median of 5 runs (<code>node bench/sql-compare.mjs --runs 5</code>). KestroDB is first in all eight on both. Aggregates that cannot use an index read an in-memory <a href="sql.html#speed">column cache</a>. Statements per second, rows per second for the bulk <code>INSERT</code>.</p>
+  <table aria-label="SQL statements, KestroDB vs SQLite, Windows and Linux">
+    <thead><tr><th>Statement</th><th class="num">Windows: KestroDB / SQLite</th><th class="num">Linux: KestroDB / SQLite</th></tr></thead>
+    <tbody>
+      <tr><td><code>SELECT * WHERE id = ?</code></td><td class="num">597,000 / 310,600 (1.92&times;)</td><td class="num">794,000 / 475,400 (1.67&times;)</td></tr>
+      <tr><td><code>SELECT * WHERE email = ?</code> (unique)</td><td class="num">425,600 / 262,500 (1.62&times;)</td><td class="num">610,600 / 420,600 (1.45&times;)</td></tr>
+      <tr><td><code>INSERT</code> one row, durable</td><td class="num">19,700 / 3,700 (5.4&times;)</td><td class="num">2,700 / 2,400 (1.13&times;)</td></tr>
+      <tr><td><code>UPDATE ... WHERE id = ?</code>, durable</td><td class="num">14,200 / 3,800 (3.7&times;)</td><td class="num">2,700 / 2,600 (1.06&times;)</td></tr>
+      <tr><td><code>INSERT</code> 500 rows per statement</td><td class="num">297,800 / 235,600 rows (1.26&times;)</td><td class="num">278,800 / 222,300 rows (1.25&times;)</td></tr>
+      <tr><td><code>WHERE city = ? ORDER BY age DESC LIMIT 10</code> (indexed)</td><td class="num">4,900 / 1,800 (2.75&times;)</td><td class="num">6,000 / 1,800 (3.42&times;)</td></tr>
+      <tr><td><code>COUNT(*) WHERE name LIKE ?</code> (full scan)</td><td class="num">2,000 / 1,600 (1.26&times;)</td><td class="num">2,600 / 1,700 (1.56&times;)</td></tr>
+      <tr><td><code>GROUP BY</code> with <code>COUNT</code>/<code>AVG</code> (full scan)</td><td class="num">954 / 382 (2.50&times;)</td><td class="num">1,200 / 372 (3.25&times;)</td></tr>
+    </tbody>
+  </table>
+  <p class="caption"><code>SELECT ... WHERE id = ?</code> and <code>WHERE col = ?</code> on a <code>UNIQUE</code> column read that one row directly, without planning a query. The durable rows are close on Linux because the WSL2 virtual disk makes every flush slow there. These come from one machine; SQLite&rsquo;s numbers moved by about 10% between runs there.</p>
+  <div class="callout callout-warn" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+    <div><p><span class="callout-title">Row-returning scans.</span> The full-scan rows above are aggregates, which read the in-memory column cache. A <code>SELECT</code> that returns whole rows from a full scan without an index (no aggregate) still reads and parses every row, because rows are checksum-verified JSON documents. <strong>Index the columns you filter on.</strong></p></div>
+  </div>
+
+  <h2 id="server-sql">SQL server against SQL server</h2>
+  <p>Windows 10, i5-14400, 2026-11-19. One Node client, both servers over TCP on the same machine, the same table (unique email, indexes on city and age), the same statements and parameters, 20,000 rows, median of 3 runs. KestroDB replies after its flush. Operations per second.</p>
+
+  <h3 id="vs-mariadb">kestro-server vs MariaDB</h3>
+  <p>MariaDB 11.4.4 runs InnoDB with <code>innodb_flush_log_at_trx_commit=1</code> (a flush per commit) and the binary log off.</p>
+  <table aria-label="kestro-server vs MariaDB">
+    <thead><tr><th>Test</th><th class="num">KestroDB</th><th class="num">MariaDB</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Bulk insert, 500 rows per statement</td><td class="num win">227,500 rows/s</td><td class="num">123,500</td><td>1.8&times;</td></tr>
+      <tr><td>Durable single-row <code>INSERT</code></td><td class="num win">10,700</td><td class="num">3,800</td><td>2.8&times;</td></tr>
+      <tr><td><code>SELECT</code> by id</td><td class="num win">29,800</td><td class="num">14,100</td><td>2.1&times;</td></tr>
+      <tr><td><code>SELECT</code> by unique column</td><td class="num win">32,400</td><td class="num">13,200</td><td>2.5&times;</td></tr>
+      <tr><td>Indexed <code>WHERE</code> + <code>ORDER BY</code> + <code>LIMIT 10</code></td><td class="num win">4,400</td><td class="num">1,100</td><td>4.0&times;</td></tr>
+      <tr><td><code>UPDATE</code> by id (durable)</td><td class="num win">11,000</td><td class="num">3,700</td><td>3.0&times;</td></tr>
+      <tr><td><code>COUNT(*)</code> with <code>LIKE</code> (full scan)</td><td class="num win">1,100</td><td class="num">487</td><td>2.3&times;</td></tr>
+      <tr><td><code>GROUP BY</code> with <code>COUNT</code>/<code>AVG</code> (full scan)</td><td class="num win">593</td><td class="num">174</td><td>3.4&times;</td></tr>
+      <tr><td><code>SELECT</code> by id, 16 connections</td><td class="num win">75,800</td><td class="num">30,400</td><td>2.5&times;</td></tr>
+      <tr><td>Durable <code>INSERT</code>, 16 connections</td><td class="num win">34,500</td><td class="num">29,600</td><td>1.2&times;</td></tr>
+    </tbody>
+  </table>
+  <p>Many connections committing single rows was the hard case (at first 6,200/s against MariaDB&rsquo;s 32,000/s): KestroDB now group-commits SQL statements from all connections, runs the next group&rsquo;s statements while the previous group is being written to disk, and waits for one disk write per commit.</p>
+
+  <h3 id="vs-postgresql">kestro-server vs PostgreSQL</h3>
+  <p>PostgreSQL 18.7 (official EDB binaries, default settings: <code>fsync=on</code>, <code>synchronous_commit=on</code>, <code>wal_sync_method=open_datasync</code>), the <code>pg</code> driver with named prepared statements.</p>
+  <table aria-label="kestro-server vs PostgreSQL">
+    <thead><tr><th>Test</th><th class="num">KestroDB</th><th class="num">PostgreSQL</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Bulk insert, 500 rows per statement</td><td class="num win">250,400 rows/s</td><td class="num">133,000</td><td>1.9&times;</td></tr>
+      <tr><td>Durable single-row <code>INSERT</code></td><td class="num win">11,700</td><td class="num">11,200</td><td>1.05&times;</td></tr>
+      <tr><td><code>SELECT</code> by id</td><td class="num win">31,700</td><td class="num">21,600</td><td>1.5&times;</td></tr>
+      <tr><td><code>SELECT</code> by unique column</td><td class="num win">33,700</td><td class="num">24,300</td><td>1.4&times;</td></tr>
+      <tr><td>Indexed <code>WHERE</code> + <code>ORDER BY</code> + <code>LIMIT 10</code></td><td class="num win">4,500</td><td class="num">1,600</td><td>2.8&times;</td></tr>
+      <tr><td><code>UPDATE</code> by id (durable)</td><td class="num win">11,700</td><td class="num">9,000</td><td>1.3&times;</td></tr>
+      <tr><td><code>COUNT(*)</code> with <code>LIKE</code> (full scan)</td><td class="num win">1,300</td><td class="num">679</td><td>1.9&times;</td></tr>
+      <tr><td><code>GROUP BY</code> with <code>COUNT</code>/<code>AVG</code> (full scan)</td><td class="num win">638</td><td class="num">404</td><td>1.6&times;</td></tr>
+      <tr><td><code>SELECT</code> by id, 16 connections</td><td class="num win">78,300</td><td class="num">39,500</td><td>2.0&times;</td></tr>
+      <tr><td>Durable <code>INSERT</code>, 16 connections</td><td class="num win">38,500</td><td class="num">33,100</td><td>1.2&times;</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Single-connection durable writes remain the close case</strong> (1.05&times; here, 1.1&times; on 2026-11-17; PostgreSQL first led 10.8K to 9.4K): a single commit now installs while its write is in flight (readers and the touched shards stay locked until it is durable), the commit record is computed during the write, and the committing thread spins briefly on the write instead of sleeping.</p>
+
+  <h2 id="php-python">PHP and Python: many processes</h2>
+  <p>Windows 10, i5-14400 (10 cores, 16 threads), 2026-11-15. N processes at once, as PHP-FPM or gunicorn workers would run. 300 durable single writes and 20,000 random point reads per process, ~230-byte JSON documents, 20,000 keys. KestroDB writes through <code>kestro-server</code> and reads in-process (<code>readFrom</code> / <code>read_from</code>).</p>
+  <p>Durability is matched: KestroDB replies after its flush; SQLite (PDO / <code>sqlite3</code>) runs WAL with <code>synchronous=FULL</code>; MySQL 8.0 runs InnoDB with <code>innodb_flush_log_at_trx_commit=1</code> (binary log off, which favours MySQL). Every engine stores JSON text and decodes it on read.</p>
+
+  <h3 id="php-windows">PHP 8.2 on Windows</h3>
+  <table aria-label="PHP 8.2, many processes">
+    <thead><tr><th class="num">Processes</th><th class="num">Writes: KestroDB</th><th class="num">SQLite</th><th class="num">MySQL</th><th class="num">Reads: KestroDB</th><th class="num">SQLite</th><th class="num">MySQL</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="num win">5,100/s</td><td class="num">3,200/s</td><td class="num">2,600/s</td><td class="num win">351,000/s</td><td class="num">106,000/s</td><td class="num">19,000/s</td></tr>
+      <tr><td class="num">4</td><td class="num win">14,100/s</td><td class="num">3,400/s</td><td class="num">4,400/s</td><td class="num win">1,127,000/s</td><td class="num">307,000/s</td><td class="num">57,000/s</td></tr>
+      <tr><td class="num">16</td><td class="num win">18,900/s</td><td class="num">3,000/s</td><td class="num">11,600/s</td><td class="num win">1,403,000/s</td><td class="num">469,000/s</td><td class="num">160,000/s</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="python-windows">Python 3.13 on Windows</h3>
+  <table aria-label="Python 3.13, many processes, Windows">
+    <thead><tr><th class="num">Processes</th><th class="num">Writes: KestroDB</th><th class="num">SQLite</th><th class="num">Reads: KestroDB</th><th class="num">SQLite</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="num win">4,500/s (embedded 9,200/s)</td><td class="num">3,800/s</td><td class="num win">170,000/s (embedded 173,000/s)</td><td class="num">96,000/s</td></tr>
+      <tr><td class="num">4</td><td class="num win">17,100/s</td><td class="num">3,000/s</td><td class="num win">671,000/s</td><td class="num">270,000/s</td></tr>
+      <tr><td class="num">16</td><td class="num win">22,900/s</td><td class="num">2,800/s</td><td class="num win">874,000/s</td><td class="num">416,000/s</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">Python was not compared with MySQL (no MySQL driver installed). &ldquo;Embedded&rdquo; is <code>kestrodb.open()</code>: one process owning the file, no server.</p>
+
+  <h3 id="through-socket">Everything through the server socket</h3>
+  <p>The same runs also measured KestroDB with reads going through the server too (one loopback round trip per read), from <code>results/php-windows.json</code> and <code>results/python-windows.json</code>, rounded to whole operations/s:</p>
+  <table aria-label="KestroDB through the socket only">
+    <thead><tr><th class="num">Processes</th><th class="num">PHP writes</th><th class="num">PHP reads</th><th class="num">Python writes</th><th class="num">Python reads</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="num">6,193/s</td><td class="num">37,740/s</td><td class="num">6,448/s</td><td class="num">31,182/s</td></tr>
+      <tr><td class="num">4</td><td class="num">13,961/s</td><td class="num">96,684/s</td><td class="num">13,837/s</td><td class="num">84,430/s</td></tr>
+      <tr><td class="num">16</td><td class="num">22,767/s</td><td class="num">248,329/s</td><td class="num">32,777/s</td><td class="num">209,894/s</td></tr>
+    </tbody>
+  </table>
+  <p>Reading through the server measured 38,000/s (1 PHP process) to 248,000/s (16): faster than MySQL, <strong>slower than in-process SQLite</strong>, which is why the clients read in-process when they can. Write numbers vary &plusmn;20% between runs on this machine.</p>
+  <p>A re-run on 2026-11-17 against MariaDB 11.4.4 (PHP 8.3, same settings) gave durable writes of 7,900 / 18,900 / 23,800 per second for KestroDB against 4,000 / 10,100 / 20,800 for MariaDB at 1 / 4 / 16 processes, and point reads of 368,000 / 1,226,000 / 1,338,000 against 24,000 / 71,000 / 167,000.</p>
+
+  <h2 id="capacity">Server capacity</h2>
+  <p>Measured with <code>node bench/stress.mjs</code> (Windows, i5-14400): every connection sends one request at a time like a PHP worker, 90% point reads and 10% durable writes, 100,000 keys.</p>
+  <table aria-label="Server capacity under many connections">
+    <thead><tr><th class="num">Connections</th><th class="num">Operations/s</th><th class="num">Durable writes/s</th><th class="num">p99 latency</th><th class="num">Errors</th><th class="num">Server memory</th></tr></thead>
+    <tbody>
+      <tr><td class="num">100</td><td class="num">206,710</td><td class="num">20,340</td><td class="num">1.1 ms</td><td class="num">0</td><td class="num">27 MB</td></tr>
+      <tr><td class="num">1,000</td><td class="num">176,995</td><td class="num">17,622</td><td class="num">9.1 ms</td><td class="num">0</td><td class="num">55 MB</td></tr>
+      <tr><td class="num">2,000</td><td class="num">174,578</td><td class="num">17,547</td><td class="num">16.7 ms</td><td class="num">0</td><td class="num">94 MB</td></tr>
+      <tr><td class="num">4,000</td><td class="num">168,786</td><td class="num">16,965</td><td class="num">34.6 ms</td><td class="num">0</td><td class="num">172 MB</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>Throughput holds as connections grow; latency grows with the queue (requests wait their turn).</li>
+    <li>Each connection costs about 40 KB plus a thread; the default limit is <code>--max-connections 1024</code>.</li>
+    <li><strong>Key index memory.</strong> The key index uses at most about 32 MB of RAM by default (<code>indexMemory</code> in Node, <code>--index-memory MB</code> for <code>kestro-server</code>; 0 keeps it all in RAM). Past that it moves to a memory-mapped file next to the database (<code>&lt;file&gt;.idx</code>), and RAM keeps only recent changes: 5,000,000 keys used 53 MB in <code>kestro-server</code> (was 327 MB), and 2,000,000 keys need about 16 MB of index RAM with random reads as fast as before (about 1.7 million per second in-process). The index file is a cache: if it is missing, stale or damaged, it is rebuilt from the database log.</li>
+    <li><strong>Ordered keys and secondary indexes</strong> (used by SQL <code>ORDER BY</code>, ranges and indexed <code>WHERE</code>) have their own budget, 16 MB by default (<code>orderedMemory</code> in Node, <code>--ordered-memory MB</code> for <code>kestro-server</code>): past it their least recently changed pages move to a scratch file (<code>&lt;file&gt;.sets</code>, deleted on close), and they are built with an external sort. A 1,000,000-row table with two indexes needs about 10 MB for them instead of 118 MB, at the same or better speed.</li>
+    <li>Copy only the <code>.kdb</code> file for backups; <code>stats()</code> reports <code>indexMode</code>, <code>indexMemory</code>, <code>indexFileBytes</code>, <code>orderedMemory</code> and <code>orderedFileBytes</code>. <strong>The 1 GB server scenario has not been measured yet.</strong></li>
+  </ul>
+
+  <h2 id="linux">Linux</h2>
+  <p>The current Linux results are in the <a href="#node-linux">key/value</a> and <a href="#sql-vs-sqlite">SQL</a> tables above: Ubuntu 24.04 under WSL2 on the benchmark machine, 2026-11-20, KestroDB first in all 8 key/value and all 8 SQL rows. Linux commits use <code>fdatasync</code>.</p>
+  <h3 id="linux-vps">Every engine on a shared VPS (2026-11-15)</h3>
+  <p>An older run: Ubuntu 24.04, AMD EPYC-Milan, 2 vCPUs, a shared VPS, Node v24.22.3, SQLite 3.54.1, median of 3 runs, engines in a fixed order, 2026-11-15 (<code>results/linux-ubuntu-2404-bench.json</code>).</p>
+  <table aria-label="All engines, Linux">
+    <thead><tr><th>Workload</th><th class="num">KestroDB in-process</th><th class="num">KestroDB worker</th><th class="num">SQLite (node:sqlite)</th><th class="num">SQLite (better-sqlite3)</th><th class="num">LMDB</th><th class="num">LevelDB</th></tr></thead>
+    <tbody>
+      <tr><td>Durable writes, one at a time</td><td class="num win">5,358</td><td class="num">3,440</td><td class="num">3,013</td><td class="num">2,964</td><td class="num">2,265</td><td class="num">2,325</td></tr>
+      <tr><td>Durable writes, 256 in flight</td><td class="num">211,713</td><td class="num">184,680</td><td class="num">4,939</td><td class="num">4,612</td><td class="num win">213,685</td><td class="num">5,796</td></tr>
+      <tr><td>Bulk load, 1,000-write transactions</td><td class="num">365,351</td><td class="num win">370,479</td><td class="num">327,382</td><td class="num">305,661</td><td class="num">324,871</td><td class="num">350,069</td></tr>
+      <tr><td>Point reads, one at a time</td><td class="num">727,891</td><td class="num">18,033</td><td class="num">245,091</td><td class="num">250,639</td><td class="num win">739,668</td><td class="num">22,470</td></tr>
+      <tr><td>Point reads, 256 in flight</td><td class="num">691,636</td><td class="num">442,850</td><td class="num">233,323</td><td class="num">255,123</td><td class="num win">742,161</td><td class="num">58,740</td></tr>
+      <tr><td>Multi-key reads, 100 keys per call</td><td class="num">663,941</td><td class="num">405,399</td><td class="num">217,028</td><td class="num">237,118</td><td class="num win">734,685</td><td class="num">381,096</td></tr>
+      <tr><td>Mixed 95% reads / 5% durable writes, 256 in flight</td><td class="num">326,773</td><td class="num">85,865</td><td class="num">54,698</td><td class="num">58,843</td><td class="num win">373,964</td><td class="num">90,951</td></tr>
+      <tr><td>Open an existing 20,000-key database (keys/s)</td><td class="num win">67,065,820</td><td class="num">2,908,355</td><td class="num">34,722,403</td><td class="num">27,503,862</td><td class="num">40,867,954</td><td class="num">8,518,805</td></tr>
+    </tbody>
+  </table>
+  <p>On that shared machine KestroDB clearly leads durable writes one at a time (1.5&ndash;1.8&times;) and opening a database (1.6&ndash;1.9&times;), and usually bulk load. In this recorded run <strong>LMDB led the other five rows</strong>, by 1% (in-flight writes) to 13% (mixed workload); across runs the leader of the read, in-flight and mixed rows changes from run to run on that machine.</p>
+
+  <h3 id="python-linux">Python 3.12 on Linux</h3>
+  <p>Same VPS (<code>results/python-linux.json</code>).</p>
+  <table aria-label="Python 3.12, many processes, Linux">
+    <thead><tr><th class="num">Processes</th><th class="num">Writes: KestroDB</th><th class="num">SQLite</th><th class="num">Reads: KestroDB</th><th class="num">SQLite</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="num win">3,700/s (embedded 6,500/s)</td><td class="num">2,300/s</td><td class="num win">198,000/s (embedded 201,000/s)</td><td class="num">132,000/s</td></tr>
+      <tr><td class="num">2</td><td class="num win">5,200/s</td><td class="num">2,500/s</td><td class="num win">322,000/s</td><td class="num">218,000/s</td></tr>
+      <tr><td class="num">4</td><td class="num win">5,200/s</td><td class="num">2,200/s</td><td class="num win">310,000/s</td><td class="num">202,000/s</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="php-linux">PHP 8.3 on Linux</h3>
+  <p>Same VPS, PHP 8.3.6 (<code>results/php-linux.json</code>). Not compared with MySQL.</p>
+  <table aria-label="PHP 8.3, many processes, Linux">
+    <thead><tr><th class="num">Processes</th><th class="num">Writes: KestroDB</th><th class="num">SQLite</th><th class="num">Reads: KestroDB</th><th class="num">SQLite</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="num win">4,000/s</td><td class="num">2,400/s</td><td class="num win">482,000/s</td><td class="num">181,000/s</td></tr>
+      <tr><td class="num">2</td><td class="num win">5,400/s</td><td class="num">2,700/s</td><td class="num win">633,000/s</td><td class="num">323,000/s</td></tr>
+      <tr><td class="num">4</td><td class="num win">7,000/s</td><td class="num">2,400/s</td><td class="num win">770,000/s</td><td class="num">278,000/s</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="capacity-linux">Server capacity on Linux</h3>
+  <p>On the same shared 2-vCPU VPS, <code>bench/stress.mjs</code> ran 100, 500 and 1,000 connections with no errors, at about 22,000 operations/s; 1,000 connections used 46 MB. Before the paged key index, 1,000,000 keys used 121 MB (126 bytes/key); with it (2026-11-16), 2,000,000 keys used 50 MB instead of 130 MB, and 5,000,000 keys 54 MB.</p>
+
+  <h2 id="caveats">Caveats</h2>
+  <ul>
+    <li>The key/value and SQL results come from one machine (Intel i5-14400) on 2026-11-20: Windows 10, and Ubuntu 24.04 under WSL2, whose virtual disk makes every flush slow. The server, PHP, Python and capacity results are from Windows; the older Linux tables come from one shared 2-vCPU VPS. Run the benchmarks on your own hardware before relying on them.</li>
+    <li>Single runs move by 10&ndash;15% on this machine when other programs run, more than some read margins (1.05&ndash;1.18&times; on Linux). Durable writes one at a time vary the most on Windows (18&ndash;24K/s across runs, disk flush timing); multi-process write numbers vary &plusmn;20% between runs.</li>
+    <li>Against PostgreSQL, single-connection durable <code>INSERT</code>s lead by only 1.05&times;.</li>
+    <li>A <code>SELECT</code> that returns whole rows from a full scan without an index still reads and parses every row (see <a href="#sql-vs-sqlite">SQL</a>); SQLite&rsquo;s numbers in the SQL comparison moved by about 10% between runs.</li>
+    <li>Reads through the server socket are slower than in-process SQLite; the fast read numbers need the client on the server&rsquo;s machine.</li>
+    <li>Linux ARM64 is tested on GitHub&rsquo;s runner on every push but has not been benchmarked; macOS is no longer run.</li>
+    <li>Batching (<code>bulk.mjs</code>) amortizes commit and IPC overhead; it does not establish superiority over another database.</li>
+  </ul>
+
+  <h2 id="reproduce">Reproduce</h2>
+<pre><code class="language-sh">cd bench/competitors && npm install && cd ../..
+node bench/compare.mjs --runs 5
+node bench/compare.mjs --runs 5 --record "what changed"   # adds a run to the tracker
+
+node bench/sql-compare.mjs --runs 5                       # SQL vs SQLite
+node bench/server-sql-compare.mjs                         # kestro-server vs MySQL/MariaDB (needs mysql2)
+KESTRO_PG_URL=postgres://... node bench/server-sql-compare.mjs   # vs PostgreSQL
+node bench/stress.mjs                                     # server capacity
+node bench/lang-compare.mjs --lang php                    # add --mysql "mysql:host=...;dbname=bench"
+node bench/lang-compare.mjs --lang python</code></pre>
+  <p>The other databases live in <code>bench/competitors</code> with their own <code>package.json</code>, so KestroDB itself has no npm dependencies. <code>node scripts/lang-results.mjs</code> refreshes the PHP and Python section of the <a href="../../index.html">benchmark tracker</a>.</p>
+</article>
+</body>
+</html>

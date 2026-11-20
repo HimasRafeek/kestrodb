@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-15T12:16:07.657Z",
+  "lang": "php",
+  "platform": "win32",
+  "cpu": "Intel(R) Core(TM) i5-14400",
+  "cores": 16,
+  "writesPerProcess": 300,
+  "readsPerProcess": 20000,
+  "keys": 20000,
+  "mysql": true,
+  "rows": [
+    {
+      "workers": 1,
+      "HimasDB": {
+        "writes": 5134.352621463809,
+        "reads": 350956.9452056514
+      },
+      "HimasDB-socket": {
+        "writes": 6192.591280211424,
+        "reads": 37740.12936349866
+      },
+      "SQLite": {
+        "writes": 3242.467003035566,
+        "reads": 106368.83522648022
+      },
+      "MySQL": {
+        "writes": 2616.4795907758207,
+        "reads": 19365.379620961943
+      }
+    },
+    {
+      "workers": 4,
+      "HimasDB": {
+        "writes": 14118.472348840798,
+        "reads": 1126808.1791102916
+      },
+      "HimasDB-socket": {
+        "writes": 13961.273643653834,
+        "reads": 96683.52185810693
+      },
+      "SQLite": {
+        "writes": 3426.1544598452597,
+        "reads": 306772.1591896068
+      },
+      "MySQL": {
+        "writes": 4414.878697877103,
+        "reads": 56790.47724949018
+      }
+    },
+    {
+      "workers": 16,
+      "HimasDB": {
+        "writes": 18851.033954533155,
+        "reads": 1402985.4765234806
+      },
+      "HimasDB-socket": {
+        "writes": 22766.517623910167,
+        "reads": 248329.00171790627
+      },
+      "SQLite": {
+        "writes": 2957.440690066486,
+        "reads": 469190.3864331698
+      },
+      "MySQL": {
+        "writes": 11603.22957124439,
+        "reads": 159780.9551972427
+      }
+    }
+  ]
+}

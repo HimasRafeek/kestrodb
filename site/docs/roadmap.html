@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap · KestroDB</title>
+<meta name="description" content="What was added in KestroDB 0.9.0, what it does not do today, and which platforms and tests are still pending.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="roadmap" class="bg-bg text-ink">
+<article id="doc">
+  <header class="doc-head">
+    <p class="eyebrow">Project</p>
+    <h1>Roadmap</h1>
+    <p class="lead">What KestroDB 0.9.0 added, what it does not do today and what is still unvalidated, taken from the project&rsquo;s changelog, README, SQL reference and to-do list. The sources do not announce dates, so nothing on this page is promised.</p>
+  </header>
+
+  <h2 id="released">Added in 0.9.0</h2>
+  <p>0.9.0 (2026-11-19) follows 0.8.0 (2026-11-15), which added <code>kestro-server</code>, the PHP, Python and Node clients, the C library with reader and owner modes, the in-process Node addon, group commit and the index snapshot. The 0.9.0 entries in <code>CHANGELOG.md</code>:</p>
+  <div class="card-grid">
+    <div class="card">
+      <h3 class="no-toc">Renamed to KestroDB <span class="badge badge-accent">Available</span></h3>
+      <p>HimasDB is now KestroDB everywhere, with no aliases: <code>kestro-server</code>, <code>kestrodb.dll</code> / <code>libkestrodb.so</code> and <code>kestro_*</code> C functions, the <code>kestrodb</code> npm package, the <code>KestroDB</code> PHP namespace, the <code>kestrodb</code> Python module, <code>KESTRO_*</code> / <code>KESTRODB_TOKEN</code> variables and <code>.kdb</code> in the docs. Older files open unchanged (see <a href="#rename">below</a>).</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Enforced constraints <span class="badge badge-accent">Available</span></h3>
+      <p><code>CHECK</code>, <code>FOREIGN KEY</code> with <code>NO ACTION</code>, <code>RESTRICT</code>, <code>CASCADE</code>, <code>SET NULL</code> and <code>SET DEFAULT</code> (chained, self-references), and multi-column <code>UNIQUE</code>; <code>ALTER TABLE ADD</code>/<code>DROP CONSTRAINT</code>. <a href="sql.html#constraints">Constraints</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">More SQL <span class="badge badge-accent">Available</span></h3>
+      <p>Window functions, <code>CASE</code>, <code>UNION</code> / <code>INTERSECT</code> / <code>EXCEPT</code> [<code>ALL</code>], <code>RIGHT</code> and <code>FULL</code> joins, <code>JOIN ... USING</code>, correlated subqueries, <code>SAVEPOINT</code> / <code>ROLLBACK TO</code> / <code>RELEASE</code>, <code>ALTER TABLE ... RENAME TO</code>, and named (<code>:name</code>, <code>@name</code>) and numbered (<code>$1</code>, <code>?1</code>) parameters. An aliased table is now known only by its alias. <a href="sql.html">SQL reference</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Replication <span class="badge badge-accent">Available</span></h3>
+      <p>Followers (<code>--replica-of</code>) seed from the leader, then stream its log byte for byte; they serve reads and refuse writes with <code>READONLY</code> until <code>promote()</code>. Lag in <code>stats().replica</code>. <a href="server.html#replication">Replication</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Synchronous replication <span class="badge badge-accent">Available</span></h3>
+      <p><code>--sync-replicas N</code>: a write is answered once N followers have it durably (RPO 0). <code>--sync-timeout</code> (5 s) before the leader goes on alone (degraded, in <code>stats().sync</code>, until a follower catches up); <code>--sync-strict</code> to wait instead. <a href="server.html#sync-replication">Synchronous replication</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Automatic failover <span class="badge badge-accent">Available</span></h3>
+      <p><code>--cluster</code>, <code>--cluster-self</code>, <code>--cluster-token-file</code>, <code>--election-timeout</code>: the members elect a leader (terms, pre-vote, leader lease); writes are answered once a majority has them; a former leader cuts back writes no majority confirmed and follows. The Node, PHP and Python clients follow the leader. <a href="server.html#cluster">Cluster</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">MVCC and <code>BEGIN CONCURRENT</code> <span class="badge badge-accent">Available</span></h3>
+      <p>Long SQL reads let waiting commits through and keep reading their snapshot. <code>BEGIN CONCURRENT</code> transactions run side by side under snapshot isolation (first committer wins, <code>CONFLICT</code> then retry). <code>SELECT</code> by id or a <code>UNIQUE</code> column reads its row directly. <a href="sql.html#transactions">SQL transactions</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Hardening <span class="badge badge-accent">Available</span></h3>
+      <p>A security review of the server (14 findings, all fixed), statement, transaction and login time limits, simulated power-loss tests, libFuzzer targets, random SQL compared with SQLite, process-kill tests, a soak test, and CI with sanitizers and fuzzing on Linux x64, Linux ARM64 and Windows on every push and pull request (macOS passed through 2026-11-19 and is no longer run). <a href="durability.html#validation">What the tests cover</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Backups and point-in-time restore <span class="badge badge-accent">Available</span></h3>
+      <p>Online, verified backups while writes continue; scheduled backups with retention; a continuous, incremental archive; restore by transaction or time into a new file (<code>kestro-server --restore</code>, Node, PHP, Python and C). <a href="server.html#backups">Backups and restore</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Online compaction <span class="badge badge-accent">Available</span></h3>
+      <p><code>compact()</code> reclaims the space of old versions while reads and writes continue, and replays the new file in full before it replaces the old one. <a href="server.html#compaction">Online compaction</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Client APIs <span class="badge badge-accent">Available</span></h3>
+      <p>Query helpers, transactions, prepared statements, error classes per code and reconnect in Node, PHP and Python; PHP persistent connections for PHP-FPM and <code>KestroDB\Embedded</code>; Python DB-API 2.0. <a href="server.html#common-api">Common API</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Java, .NET, Rust and Go clients <span class="badge badge-accent">Available</span></h3>
+      <p>Java 17+: <code>KestroClient</code> and a minimal JDBC driver, no dependencies.<br>
+      .NET 8+: an async and blocking <code>KestroClient</code> and a minimal ADO.NET provider, no dependencies.<br>
+      Rust: the <code>kestrodb</code> crate, with TLS as an optional feature.<br>
+      Go 1.21+: a <code>Client</code> and a <code>database/sql</code> driver, standard library only.<br>
+      All four talk to <code>kestro-server</code>; with Node, PHP and Python, clients in seven languages are tested against it. <a href="server.html#clients">Clients</a>.</p>
+    </div>
+    <div class="card">
+      <h3 class="no-toc">Less memory <span class="badge badge-accent">Available</span></h3>
+      <p>A compact key index that pages to a memory-mapped <code>.idx</code> file past <code>indexMemory</code> (5,000,000 keys: 327 MB &rarr; 53 MB in the server), and paged ordered keys and secondary indexes past <code>orderedMemory</code> (1,000,000 rows with two indexes: 118 MB &rarr; 10 MB). <a href="performance.html#capacity">Server capacity</a>.</p>
+    </div>
+  </div>
+  <p>The same release also lists faster commits (one disk write per commit on Windows, SQL group commit across server connections) and the SQL base it builds on: enforced column types, transactions, joins and subqueries, <code>ALTER TABLE ... ADD / DROP / RENAME COLUMN</code> and the column cache. See <a href="performance.html#server-sql">kestro-server against MariaDB and PostgreSQL</a>.</p>
+
+  <h3 id="rename">Coming from HimasDB</h3>
+  <p>KestroDB was called HimasDB before 0.9.0. Existing <code>.hdb</code> files open unchanged and keep taking commits: new files are written with the <code>KDBNAT02</code> / <code>KDBG0002</code> markers, and the older <code>HDBNAT02</code> / <code>HDBG0002</code> are still read (one file may hold both). Their index snapshot and <code>.idx</code> cache are rebuilt once. Any file extension opens; the docs use <code>.kdb</code>. Code must switch to the new names, since there are no aliases.</p>
+
+  <h2 id="not-supported">Not supported today</h2>
+  <h3 id="sql-gaps">SQL</h3>
+  <p>From the SQL reference&rsquo;s &ldquo;Not supported yet&rdquo; list:</p>
+  <ul>
+    <li><code>WITH</code> before <code>INSERT</code>, <code>UPDATE</code> or <code>DELETE</code> (it works for <code>SELECT</code>)</li>
+    <li><code>ALTER COLUMN ... TYPE ... USING</code>, MySQL <code>CHANGE COLUMN</code>, several changes in one <code>ALTER TABLE</code></li>
+    <li>Window <code>EXCLUDE</code> clauses</li>
+    <li>Deferred constraints (checks are never deferred to <code>COMMIT</code>)</li>
+    <li><code>NATURAL</code> joins</li>
+    <li><code>MATCH</code> inside joins, stemming and stop words in full-text search</li>
+    <li><code>LISTEN</code> over <code>tls://</code>, and notifications from other processes</li>
+    <li>SQL through in-process readers: <code>readFrom</code> / <code>read_from</code> answer <code>get</code>/<code>getMany</code>, and SQL from those clients runs on the server</li>
+  </ul>
+  <h3 id="engine-gaps">Engine and deployment</h3>
+  <p>From the README&rsquo;s &ldquo;What KestroDB does not do&rdquo; list and <code>ROADMAP.md</code>:</p>
+  <ul>
+    <li><strong>Clusters across regions:</strong> a cluster answers a write once a majority has it, so members far apart add their round trip to every write.</li>
+    <li><strong>A column cache for row-returning scans:</strong> aggregates over a whole table use an in-memory column cache and beat SQLite, but a <code>SELECT</code> that returns whole rows without an index reads and parses every row.</li>
+    <li><strong>Several writing processes on one file:</strong> one process owns the file (a second owner gets <code>LOCKED</code>); other processes write through <code>kestro-server</code> and can read the file directly.</li>
+    <li><strong>Read-then-write transactions in the key/value API:</strong> there, batches are atomic writes and <code>expectedVersion</code> gives optimistic concurrency; use SQL <code>BEGIN ... COMMIT</code> for transactions that read and then write.</li>
+    <li><strong>Automatic space reclamation:</strong> old versions stay in the file until you run <code>compact()</code> (online) or <code>compactTo()</code>.</li>
+    <li><strong>One memory budget:</strong> the key index and the ordered indexes have their own budgets, but the column cache has a fixed cell cap rather than a RAM budget with eviction, and there is no single setting for the total.</li>
+    <li><strong>Native extensions for each language:</strong> PHP and Python use FFI/ctypes over the C library; the Java, .NET, Rust and Go clients talk to the server only, and embedded use from other languages needs a small binding over <code>src/kestrodb.h</code>.</li>
+    <li><strong>Remote reads without a round trip:</strong> in-process reads need the database file on the same machine, the server&rsquo;s or a follower&rsquo;s.</li>
+    <li><strong>Years of production use:</strong> it is fuzzed, power-loss tested in simulation, run under the address and thread sanitizers and soak-tested in CI and on Windows, but it has not yet run real production workloads for long.</li>
+  </ul>
+  <p>Also open in <code>ROADMAP.md</code>: publishing the packages (npm, PyPI, Packagist, Docker Hub), per-platform npm packages, macOS and musl builds and a native Windows service; Laravel, Django and WordPress drivers; change notifications across processes; an event-driven server for tens of thousands of connections (today one thread per connection); certificate revocation, and client certificates in the Go, Rust, Java and .NET clients; HTTPS for the metrics endpoint; faster row-returning full scans; and rate limiting per user.</p>
+  <p>Also from the README: network shares, cloud-sync folders and multi-host shared disks are not supported. Native TLS on the Windows server (Schannel) was added on 2026-11-20, so a TLS proxy is no longer needed there.</p>
+
+  <h2 id="validation-pending">Validation and hardening</h2>
+  <p>From <code>VALIDATION.md</code> and <code>ROADMAP.md</code>, as of 2026-11-20:</p>
+  <table aria-label="Validation status">
+    <thead><tr><th>Area</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Linux x86-64 under WSL2</td><td><span class="badge badge-accent">Done</span> <code>scripts/linux-check.sh</code> on the benchmark machine (Ubuntu 24.04, GCC 13): the portable, POSIX and power-loss suites, 129 Node tests with clients in seven languages, AddressSanitizer + UBSan, ThreadSanitizer (without address randomization and its deadlock detector), and the benchmarks (first in all 8 key/value and all 8 SQL rows).</td></tr>
+      <tr><td>macOS (Apple Silicon)</td><td><span class="badge">No longer run</span> Passed every suite on GitHub&rsquo;s macOS runner (macOS 26, ARM64) through 2026-11-19; not a target for now. Not benchmarked.</td></tr>
+      <tr><td>Linux ARM64</td><td><span class="badge badge-accent">Done</span> The native suites and every Node suite on GitHub&rsquo;s ubuntu-24.04-arm runner, on every push and pull request.</td></tr>
+      <tr><td>CI workflow</td><td><span class="badge badge-accent">Done</span> <code>.github/workflows/platforms.yml</code> builds and tests Linux x64, Linux ARM64 and Windows and runs AddressSanitizer + UBSan, ThreadSanitizer and libFuzzer fuzzing on every push and pull request; a longer job (100,000 random queries compared with SQLite, writers killed 50 times) runs weekly and on demand. macOS is not run.</td></tr>
+      <tr><td>Power loss</td><td><span class="badge badge-warn">Simulation only</span> Every disk state a power cut could leave is rebuilt and checked (<code>src/tests_powerloss.cpp</code>, 19,788 states consistent). No power-cut tests on real hardware; no disk-full or hardware-failure tests.</td></tr>
+      <tr><td>Fuzzing</td><td><span class="badge badge-accent">Done</span> libFuzzer targets for the SQL parser, JSON, the wire protocol and the file format, 3 minutes per target in CI on every push and pull request. Longer runs (OSS-Fuzz or scheduled) are still to do.</td></tr>
+      <tr><td>Soak and sanitizer runs</td><td><span class="badge">Partly done</span> 3 hours, 67 million operations, no errors; 1 hour, 22 million operations, no errors. ASan+UBSan and TSan run under WSL2 and in CI on every push. Days-long runs are still to do.</td></tr>
+      <tr><td>Server security review</td><td><span class="badge">Partly done</span> Reviewed: 14 findings, all fixed. An external audit and rate limiting per user are still to do.</td></tr>
+      <tr><td>Cross-OS file handoffs</td><td><span class="badge">Pending</span> Linux &rarr; Windows &rarr; macOS &rarr; Linux with continued writes and verification.</td></tr>
+      <tr><td>Memory at scale</td><td><span class="badge">Pending</span> 10M- and 50M-key runs and the 1 GB server scenario.</td></tr>
+      <tr><td>Python against MySQL</td><td><span class="badge">Pending</span> Not part of the published benchmarks (no MySQL driver was installed).</td></tr>
+    </tbody>
+  </table>
+</article>
+</body>
+</html>

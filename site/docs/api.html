@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Node.js API · KestroDB</title>
+<meta name="description" content="The KestroDB Database API for Node.js: SQL with query helpers and prepared statements, key/value calls, versions, batches, async group commit, backups, archive and restore, online compaction, open options and errors.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="api" class="bg-bg text-ink">
+<article id="doc">
+  <header class="doc-head">
+    <p class="eyebrow">Reference</p>
+    <h1>Node.js API</h1>
+    <p class="lead"><code>Database</code> runs the engine inside your Node process through a Node-API addon (<code>bin/kestro.node</code>). Calls are synchronous, like <code>node:sqlite</code>&rsquo;s <code>DatabaseSync</code>; a write returns only once it is durable on disk.</p>
+  </header>
+
+  <h2 id="open">Opening a database</h2>
+<pre><code class="language-js">import {Database} from 'kestrodb';   // or './index.mjs' inside this folder
+
+const db = new Database(path, {create: false, ...options});
+// or: const db = Database.open(path, options);</code></pre>
+  <p>One process owns a database file at a time. Inside that process, reads are fast enough to call synchronously, and async writes are group-committed on a background thread. To share a database between processes, use <a href="server.html"><code>kestro-server</code></a>.</p>
+
+  <h3 id="options">Open options</h3>
+  <p>All options are optional.</p>
+  <table aria-label="Open options">
+    <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>create</code></td><td><code>false</code></td><td>Create a new file. Refuses to overwrite an existing one.</td></tr>
+      <tr><td><code>jsonValidation</code></td><td><code>'strict'</code></td><td><code>'strict'</code> rejects values that <code>JSON.stringify</code> would silently change (Dates, Maps, getters, sparse arrays, unsafe integers). <code>'basic'</code> stores what <code>JSON.stringify</code> returns, like most databases&rsquo; Node bindings, and writes faster.</td></tr>
+      <tr><td><code>verifyOnOpen</code></td><td><code>false</code></td><td>Finish verifying the whole file before <code>new Database</code> returns, instead of in the background (see <a href="durability.html#index-snapshot">index snapshot</a>).</td></tr>
+      <tr><td><code>readMode</code></td><td><code>'auto'</code></td><td><code>'auto'</code> reads through memory mapping; <code>'pread'</code> uses file reads.</td></tr>
+      <tr><td><code>orderedSync</code></td><td><code>false</code></td><td>Linux/macOS: flush data before metadata, then again before returning.</td></tr>
+      <tr><td><code>indexMemory</code></td><td>32 MB</td><td>Bytes of RAM for the key index before it moves to a memory-mapped <code>&lt;path&gt;.idx</code> file (a cache, rebuilt from the log when missing or damaged); <code>0</code> keeps it all in RAM.</td></tr>
+      <tr><td><code>orderedMemory</code></td><td>16 MB</td><td>Bytes of RAM for ordered keys and secondary indexes (SQL) before their pages move to <code>&lt;path&gt;.sets</code> (deleted on close); <code>0</code> keeps them all in RAM.</td></tr>
+    </tbody>
+  </table>
+  <p>The cost of <code>'strict'</code>: in-process bulk load measured 302,000 writes/s strict against 519,000/s basic.</p>
+
+  <h2 id="methods">Methods</h2>
+  <table aria-label="Database methods">
+    <thead><tr><th>Call</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>db.sql(text, params?)</code></td><td>Runs one SQL statement (<a href="sql.html">SQL reference</a>). <code>SELECT</code> returns <code>{rows}</code>; writes return <code>{changes, lastInsertId?}</code>. Params: an array for <code>?</code>/<code>$1</code>, or an object for <code>:name</code>.</td></tr>
+      <tr><td><code>db.query</code>, <code>db.queryOne</code>, <code>db.queryValue</code>, <code>db.execute</code></td><td>Rows; the first row; its first value; the number of rows changed (<code>db.lastInsertId</code> after an <code>INSERT</code>).</td></tr>
+      <tr><td><code>db.transaction(fn)</code>, <code>db.prepare(sql)</code></td><td><code>fn</code> inside <code>BEGIN</code> ... <code>COMMIT</code> (<code>ROLLBACK</code> if it throws); a prepared statement with <code>all</code>, <code>get</code>, <code>value</code>, <code>run</code>.</td></tr>
+      <tr><td><code>db.set(collection, key, value, {expectedVersion}?)</code></td><td>Saves a JSON value. Returns <code>{version, operations}</code>.</td></tr>
+      <tr><td><code>db.get(collection, key)</code></td><td><code>{version, value}</code>, or <code>null</code> if missing.</td></tr>
+      <tr><td><code>db.getMany(collection, keys)</code></td><td>Up to 4,096 keys from one consistent snapshot; keeps order, duplicates and <code>null</code>s.</td></tr>
+      <tr><td><code>db.delete(collection, key, {expectedVersion}?)</code></td><td>Removes a key.</td></tr>
+      <tr><td><code>db.batch([...operations])</code></td><td>Several <code>set</code>/<code>delete</code> operations as one all-or-nothing transaction with one version.</td></tr>
+      <tr><td><code>db.setAsync</code>, <code>db.deleteAsync</code>, <code>db.batchAsync</code></td><td>The same writes, returning promises. Writes made at the same time share one disk flush (group commit), which is much faster for servers.</td></tr>
+      <tr><td><code>db.stats()</code></td><td>Key count, file size, last version, and how the database was opened.</td></tr>
+      <tr><td><code>db.verify()</code></td><td>Re-checks the whole file against its checksums.</td></tr>
+      <tr><td><code>db.backup(path)</code></td><td>Writes a verified copy to a new file, online: writes continue while it copies.</td></tr>
+      <tr><td><code>db.archive(dir)</code>, <code>Database.restore(source, dest, {txid, time})</code></td><td>Continuous archive and point-in-time restore; see <a href="#backup-restore">Backups, archive and restore</a>.</td></tr>
+      <tr><td><code>db.compactTo(path)</code></td><td>Writes a copy with only the current values (drops old versions).</td></tr>
+      <tr><td><code>db.compact()</code></td><td>Online compaction: rewrites this file to hold only current values while reads and writes continue.</td></tr>
+      <tr><td><code>db.close()</code></td><td>Waits for queued async writes, then closes. <code>Database</code> also supports <code>using</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="sql">SQL</h2>
+<pre><code class="language-js">db.sql('INSERT INTO users (email, name, age) VALUES (?, ?, ?)', ['kestro@example.com', 'Kestro', 30]);
+// → {changes: 1, lastInsertId: 1}
+db.sql('SELECT * FROM users WHERE age >= ? ORDER BY age DESC LIMIT 10', [18]);
+// → {rows: [{id: 1, email: ..., name: 'Kestro', age: 30}]}</code></pre>
+  <p><code>params</code> is an array for <code>?</code>, <code>?N</code> and <code>$N</code> placeholders, or an object for <code>:name</code> and <code>@name</code> (see <a href="sql.html#placeholders">placeholders</a>). Each statement is atomic and durable before it returns. See the <a href="sql.html">SQL reference</a>.</p>
+  <h3 id="sql-helpers">Query helpers and prepared statements</h3>
+<pre><code class="language-js">db.execute('INSERT INTO users (email, name) VALUES (:email, :name)', {email: 'a@example.com', name: 'Ann'});   // → 1 (rows changed)
+const user = db.queryOne('SELECT * FROM users WHERE id = ?', [db.lastInsertId]);   // first row or null
+const count = db.queryValue('SELECT COUNT(*) FROM users');                           // first column of the first row
+const byCity = db.prepare('SELECT * FROM users WHERE city = ?');
+const rows = byCity.all(['Kandy']);                                                 // also get, value, run</code></pre>
+  <p><code>RemoteDB</code> has the same methods, returning promises; see the <a href="server.html#common-api">common client API</a>.</p>
+  <h3 id="sql-transactions">Transactions</h3>
+  <p>A <code>Database</code> is one connection, so <code>BEGIN</code> ... <code>COMMIT</code> (or <code>ROLLBACK</code>) run through <code>sql()</code>, or <code>db.transaction(fn)</code>, group its statements into one atomic, durable commit:</p>
+<pre><code class="language-js">db.transaction(() => {        // COMMIT, or ROLLBACK and rethrow if fn throws; fn may also be async
+  db.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [amount, from]);
+  db.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [amount, to]);
+});
+
+db.sql('BEGIN');              // the same by hand
+db.sql('UPDATE accounts SET balance = balance - ? WHERE id = ?', [amount, from]);
+db.sql('SAVEPOINT fee');
+db.sql('UPDATE accounts SET balance = balance - 1 WHERE id = ?', [from]);
+db.sql('ROLLBACK TO SAVEPOINT fee');   // undo only the fee
+db.sql('COMMIT');             // or db.sql('ROLLBACK')</code></pre>
+  <ul>
+    <li>Plain <code>BEGIN</code> transactions write one at a time (serializable); other writers wait for one and reads never do. Keep transactions short.</li>
+    <li><code>BEGIN CONCURRENT</code> transactions run side by side under snapshot isolation: one holds no gate until <code>COMMIT</code>, and the first to commit a row wins. A later one that wrote the same row fails with <code>CONFLICT</code> and is rolled back, so run it again from <code>BEGIN</code>. Foreign keys and unique constraints are checked again at <code>COMMIT</code>. Two such transactions can each read what the other writes and both commit (write skew); use plain <code>BEGIN</code> where that matters.</li>
+    <li>Long reads do not hold up writes: a long query lets waiting commits through and keeps reading the state it started with (MVCC). <code>stats().snapshotYields</code> counts the commits let through and <code>stats().snapshotMemory</code> the memory kept for such reads.</li>
+    <li>Inside a transaction, key/value writes (such as <code>set</code>, <code>delete</code> and <code>batch</code>) on the same <code>Database</code> are refused, because they would wait for the transaction itself. <code>CREATE</code>/<code>DROP</code> must run outside transactions.</li>
+    <li>Closing the database rolls an open transaction back. A transaction can change up to 65,536 rows.</li>
+  </ul>
+  <p>Details: <a href="sql.html#transactions">SQL transactions</a>.</p>
+
+  <h2 id="key-value">Collections, keys and values</h2>
+  <ul>
+    <li><strong>Collections</strong> are names like <code>users</code> (letters, digits, <code>_</code>, up to 64 characters).</li>
+    <li><strong>Keys</strong> are any text up to 512 bytes (valid Unicode, no NUL).</li>
+    <li><strong>Values</strong> are JSON, up to 256 KiB each.</li>
+  </ul>
+<pre><code class="language-js">db.set('users', 'kestro', {name: 'Kestro'});        // → {version, operations: 1}
+db.get('users', 'kestro');                          // → {version, value: {name: 'Kestro'}}
+db.getMany('users', ['kestro', 'missing']);         // → [{version, value}, null]
+db.delete('users', 'kestro');</code></pre>
+
+  <h3 id="versions">Versions and optimistic concurrency</h3>
+  <p>Versions let you update safely: pass <code>{expectedVersion: v}</code> and the write fails with <code>CONFLICT</code> if someone else changed the key since you read version <code>v</code>. <code>0</code> means &ldquo;must not exist yet&rdquo;.</p>
+<pre><code class="language-js">const before = db.get('items', '0');
+db.set('items', '0', {...before.value, count: 1}, {expectedVersion: before.version});  // fails if someone changed it meanwhile
+db.set('items', 'new', {count: 0}, {expectedVersion: 0});                               // only if it does not exist yet</code></pre>
+
+  <h3 id="batches">Batches</h3>
+  <p>A batch is one all-or-nothing transaction, and every operation in it gets the same version. Operations look like <code>{type: 'set' | 'delete', collection, key, value?, expectedVersion?}</code>. Duplicate keys within one batch are rejected.</p>
+<pre><code class="language-js">db.batch([
+  {type: 'set', collection: 'users', key: 'kestro', value: {name: 'Kestro'}},
+  {type: 'delete', collection: 'sessions', key: 'old', expectedVersion: 7},
+]);   // → {version, operations: 2}</code></pre>
+
+  <h3 id="async">Async writes and group commit</h3>
+  <p><code>setAsync</code>, <code>deleteAsync</code> and <code>batchAsync</code> queue writes for a background writer thread. Every write queued while a flush is running shares the next flush (group commit), and each promise resolves after the flush that covers it. Async writes issued in the same tick go to the native writer in one call and commit as one group; each still gets its own version, or fails alone. Use them when many writes are in flight at once, such as in a server.</p>
+<pre><code class="language-js">await Promise.all(['a', 'b', 'c'].map(k => db.setAsync('items', k, {k})));   // concurrent writes, one commit</code></pre>
+
+  <h3 id="bulk">Streaming large imports</h3>
+  <p><code>bulk.mjs</code> (<code>kestrodb/bulk</code>) streams a large import as a series of batches:</p>
+<pre><code class="language-js">import {Database} from './index.mjs';
+import {importBatches} from './bulk.mjs';
+const db = new Database('./app.kdb');
+try {
+  async function* operations() {
+    for (let i=0; i<10000; i++)
+      yield {type:'set', collection:'items', key:String(i), value:{i}};
+  }
+  for await (const receipt of importBatches(db, operations(), {batchSize:256}))
+    console.log(receipt.committedOperations, receipt.version);
+} finally { db.close(); }</code></pre>
+  <p>Each batch is one atomic transaction and receives one version; the whole stream is not atomic. Earlier yielded receipts remain committed if a later batch fails, and the failed batch can have an unknown outcome after an I/O error. The helper does not retry automatically: reconcile before resuming. It consumes at most one batch of operations before awaiting its commit, and breaking the loop stops further submissions.</p>
+
+  <h2 id="maintenance">Stats, verify, backup and compaction</h2>
+<pre><code class="language-js">db.stats();                    // key count, file size, last version, openedFrom, verification, indexMode, ...
+db.verify();                   // → {ok: true}, or throws CORRUPT
+db.backup('./backup.kdb');     // online, verified copy; refuses to overwrite
+db.compact();                  // online: rewrites this file with only current values
+db.compactTo('./compact.kdb'); // copy with only current values</code></pre>
+  <p>For example, the benchmark recorded these <code>stats()</code> fields for a fresh in-process database on Windows (<code>results/bench-history.json</code>): <code>keys</code>, <code>indexMemory</code>, <code>indexFileBytes</code>, <code>orderedMemory</code>, <code>orderedFileBytes</code>, <code>bytes</code>, <code>txid</code>, <code>readMode</code> (<code>"mapped"</code>), <code>commitPolicy</code>, <code>openedFrom</code> (<code>"log-replay"</code>), <code>verification</code> (<code>"at-open"</code>), <code>indexMode</code> (<code>"memory"</code>), <code>pointChecksum</code>, <code>platform</code>, <code>fileSync</code>, <code>namespaceSync</code> and <code>sha256Backend</code>.</p>
+  <p>Updates and deletes leave old versions in the file. <code>compact()</code> reclaims that space <strong>while reads and writes continue</strong>: current values go to a new file shard by shard, transactions committed meanwhile are appended, and writes pause only for the last few transactions and the switch. The new file is checked in full before it replaces the old one, and a crash at any point leaves the database whole. It returns the committed bytes before and after. Nothing reclaims space automatically; see <a href="server.html#compaction">online compaction</a>.</p>
+  <h3 id="backup-restore">Backups, archive and restore</h3>
+<pre><code class="language-js">db.archive('/mnt/other-disk/archive');   // appends what was committed since the last call → {txid, end}
+Database.restore('/mnt/other-disk/archive/archive.kdb', './restored.kdb', {time: new Date('2026-11-17T14:32:10Z')});
+Database.restore('./backup.kdb', './restored.kdb');                      // a whole backup
+Database.restore('/mnt/other-disk/archive/archive.kdb', './restored.kdb', {txid: 48211});   // cut after that transaction</code></pre>
+  <ul>
+    <li><code>backup()</code> reads the commit point under a short lock and copies the committed bytes while writes continue; every copy is checked (SHA-256 and the chain of every transaction) before it is published.</li>
+    <li><code>archive(dir)</code> keeps <code>dir/archive.kdb</code>, a valid database holding every transaction archived so far, and <code>dir/timeline</code>. Each call appends only what was committed since the last one.</li>
+    <li><code>Database.restore(source, dest, {txid, time})</code> writes a new database from a database, backup or <code>archive.kdb</code>, cut after transaction <code>txid</code>, or at the last archived point at or before <code>time</code> (a <code>Date</code> or milliseconds). It never overwrites.</li>
+  </ul>
+  <p><code>kestro-server</code> does the same on a schedule (<code>--backup-every</code>, <code>--archive-every</code>); see <a href="server.html#backups">Backups and restore</a>.</p>
+
+  <h2 id="errors">Errors</h2>
+  <p>Errors from the engine start their message with a code, and native errors thrown to JavaScript carry the code in <code>error.code</code>. Invalid arguments caught in JavaScript throw an error whose <code>code</code> property is <code>INPUT</code> or <code>LIMIT</code>.</p>
+  <table aria-label="Error codes">
+    <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>INPUT</code></td><td>Invalid argument, value or SQL.</td></tr>
+      <tr><td><code>LIMIT</code></td><td>A size limit was exceeded (for example a value over 256 KiB of JSON).</td></tr>
+      <tr><td><code>CONFLICT</code></td><td>A failed <code>expectedVersion</code>, or a duplicate id or unique value in SQL.</td></tr>
+      <tr><td><code>LOCKED</code></td><td>Another process has the file open.</td></tr>
+      <tr><td><code>CORRUPT</code></td><td>Stored data failed its checks. It is never returned, and the engine does not repair it.</td></tr>
+      <tr><td><code>UNKNOWN_COMMIT</code></td><td>An I/O failure left a write&rsquo;s outcome unknown: reopen and check before retrying.</td></tr>
+      <tr><td><code>UNSUPPORTED</code></td><td>SQL that is not supported yet.</td></tr>
+      <tr><td><code>CLOSED</code></td><td>The database was already closed.</td></tr>
+    </tbody>
+  </table>
+<pre><code class="language-js">try {
+  db.set('users', 'kestro', {name: 'Kestro'}, {expectedVersion: 3});
+} catch (e) {
+  if (e.code === 'CONFLICT') { /* re-read and retry */ }
+  else throw e;
+}</code></pre>
+
+  <h2 id="other-clients">Other Node.js clients</h2>
+  <h3 id="remote">RemoteDB (server)</h3>
+  <p><code>remote.mjs</code> (<code>import {RemoteDB} from 'kestrodb/remote'</code>) connects to <code>kestro-server</code> so many processes (and languages) share one database. Every call is async and returns the same shapes as <code>Database</code>, including <code>query</code>, <code>execute</code>, <code>transaction</code> and <code>prepare</code>; admin connections also have <code>compact()</code> and <code>promote()</code> (for <a href="server.html#replication">replication</a>). For a <a href="server.html#cluster">cluster</a>, give every member (an array or a comma-separated string): writes go to the leader, also during an election. See <a href="server.html#node">Server &amp; clients</a>.</p>
+  <h3 id="worker">The worker process (advanced)</h3>
+  <p><code>worker/client.mjs</code> (<code>import {NativeDB} from 'kestrodb/worker'</code>) runs the same engine in a separate process (<code>bin/kestro-worker</code>) and talks to it over a pipe. Every call is async. It is <strong>slower</strong> (each read is a round trip between processes), and most apps should use <code>Database</code>. Reasons to use it anyway:</p>
+  <ul>
+    <li>a crash in native code ends only the worker, not your Node process;</li>
+    <li>your environment cannot load a native addon (<code>kestro.node</code>);</li>
+    <li>you want even disk flushes kept off Node&rsquo;s process entirely.</li>
+  </ul>
+<pre><code class="language-js">import {NativeDB} from 'kestrodb/worker';
+
+const db = await NativeDB.open('./app.kdb', {create: true});
+await db.set('users', 'kestro', {name: 'Kestro'});
+console.log(await db.get('users', 'kestro'));
+await db.close();</code></pre>
+  <p>It accepts the same options. Requests issued together travel in one pipe write, and consecutive writes are group-committed. The test suite also uses the worker to inject crashes at exact points of a commit.</p>
+</article>
+</body>
+</html>

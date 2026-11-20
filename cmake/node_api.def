@@ -1,0 +1,44 @@
+; Node-API functions used by src/addon.cpp, imported from the running node.exe.
+; The addon build generates its Windows import library from this list, so no
+; Node.js download or node.lib is needed. Add an entry when addon.cpp uses a new call.
+NAME node.exe
+EXPORTS
+ napi_call_function
+ napi_call_threadsafe_function
+ napi_create_array_with_length
+ napi_create_buffer_copy
+ napi_create_double
+ napi_create_error
+ napi_create_external
+ napi_create_object
+ napi_create_promise
+ napi_create_reference
+ napi_create_string_utf8
+ napi_create_threadsafe_function
+ napi_define_properties
+ napi_delete_reference
+ napi_get_array_length
+ napi_get_buffer_info
+ napi_get_cb_info
+ napi_get_element
+ napi_get_last_error_info
+ napi_get_null
+ napi_get_reference_value
+ napi_get_typedarray_info
+ napi_get_undefined
+ napi_get_value_bool
+ napi_get_value_external
+ napi_get_value_int32
+ napi_get_value_string_utf8
+ napi_is_exception_pending
+ napi_ref_threadsafe_function
+ napi_reject_deferred
+ napi_release_threadsafe_function
+ napi_resolve_deferred
+ napi_set_element
+ napi_set_named_property
+ napi_throw_error
+ napi_unref_threadsafe_function
+napi_typeof
+napi_get_value_double
+napi_create_string_latin1

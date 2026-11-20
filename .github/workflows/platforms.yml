@@ -1,0 +1,138 @@
+name: Native platforms
+# Every push and pull request: Linux x64 and ARM64 and Windows (build, C++ suites, every Node
+# suite with the PHP and Python clients), AddressSanitizer + UBSan, ThreadSanitizer and fuzzing.
+# The longer "deep" job (100,000 random queries checked against SQLite, writers killed 50
+# times) runs weekly and on demand.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      # PHP for the PHP client suites (Linux and Windows runners include it; FFI is enabled
+      # for the CLI by default).
+      - name: Build native backend and tests
+        run: npm run build
+      - name: Native concurrency, recovery, compatibility and Node tests
+        run: npm test
+      # The other databases are benchmark tooling, not KestroDB: their install (native modules,
+      # sometimes built from source) and the smoke benchmark must not fail the build.
+      - name: Install comparison databases (better-sqlite3, LMDB, LevelDB)
+        continue-on-error: true
+        timeout-minutes: 10
+        run: npm install --prefix bench/competitors --no-audit --no-fund
+      - name: Benchmark smoke run against the other databases
+        continue-on-error: true
+        timeout-minutes: 10
+        run: node bench/compare.mjs --keys 5000 --durable 100 --json bench-${{ matrix.os }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: bench-${{ matrix.os }}
+          path: bench-${{ matrix.os }}.json
+      - name: Build portable BLAKE3 fallback
+        run: cmake -S . -B build-portable -DCMAKE_BUILD_TYPE=Release -DKESTRO_PORTABLE_HASH=ON
+      - run: cmake --build build-portable --config Release --parallel 2
+      - run: ctest --test-dir build-portable -C Release --output-on-failure
+  # The C++ suites under AddressSanitizer + UndefinedBehaviorSanitizer, and under
+  # ThreadSanitizer (the group commit, readers, compaction and replication threads).
+  sanitizers:
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, thread]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev
+      - run: cmake -S . -B build-san -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKESTRO_SANITIZER=${{ matrix.sanitizer }}
+      - run: cmake --build build-san --parallel 2 --target kestro-portable-tests kestro-posix-tests kestro-powerloss-tests
+      - name: Portable and POSIX suites under ${{ matrix.sanitizer }}
+        env:
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:detect_deadlocks=0  # its deadlock detector stops at 64 held locks (commits hold 64 shard locks)
+        run: ctest --test-dir build-san --output-on-failure
+  # libFuzzer targets (fuzz/) with AddressSanitizer: a few minutes each per change.
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm run build
+      - name: Seed the corpora
+        run: node fuzz/seed.mjs
+      - name: Build the fuzz targets (clang, libFuzzer, ASan, UBSan)
+        run: |
+          mkdir -p build-fuzz
+          # BLAKE3 is C: compiled on its own, then linked into every target.
+          for c in blake3 blake3_dispatch blake3_portable; do
+            clang -O1 -g -fsanitize=address,undefined -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512               -Ivendor/blake3 -c vendor/blake3/$c.c -o build-fuzz/$c.o
+          done
+          for t in fuzz_parse fuzz_protocol fuzz_sql_exec fuzz_open; do
+            clang++ -std=c++17 -O1 -g -fsanitize=fuzzer,address,undefined -Isrc -Ivendor/blake3 fuzz/$t.cpp               build-fuzz/blake3.o build-fuzz/blake3_dispatch.o build-fuzz/blake3_portable.o -lcrypto -lpthread -o build-fuzz/$t
+          done
+      - name: Fuzz each target for three minutes
+        run: |
+          mkdir -p build-fuzz/crashes
+          build-fuzz/fuzz_parse -max_total_time=180 -timeout=10 -max_len=2048 -artifact_prefix=build-fuzz/crashes/parse- fuzz/corpus-parse
+          build-fuzz/fuzz_protocol -max_total_time=180 -timeout=10 -max_len=2048 -artifact_prefix=build-fuzz/crashes/protocol- fuzz/corpus-protocol
+          build-fuzz/fuzz_sql_exec -max_total_time=180 -timeout=10 -max_len=2048 -artifact_prefix=build-fuzz/crashes/sql- fuzz/corpus-sql
+          build-fuzz/fuzz_open -max_total_time=180 -timeout=10 -max_len=262144 -artifact_prefix=build-fuzz/crashes/open- fuzz/corpus-open
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: build-fuzz/crashes
+  # Longer random SQL (against SQLite) and crash-consistency runs, weekly and on demand.
+  deep:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm run build
+      - name: 100,000 random queries compared with SQLite
+        env:
+          KESTRO_SQLFUZZ_SEED: ${{ github.run_number }}
+          KESTRO_SQLFUZZ_COUNT: '100000'
+        run: node --test tests/sqlfuzz.test.mjs
+      - name: Writers killed 50 times
+        env:
+          KESTRO_CRASH_ROUNDS: '50'
+        run: node --test tests/crash.test.mjs

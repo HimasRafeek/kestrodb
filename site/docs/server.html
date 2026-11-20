@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server &amp; clients · KestroDB</title>
+<meta name="description" content="Run kestro-server and connect from PHP, Python and Node.js; backups, point-in-time restore, online compaction, replication and automatic failover; read in-process beside the server; embed KestroDB in PHP and Python; use the C API from any language.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="server" class="bg-bg text-ink">
+<article id="doc">
+  <header class="doc-head">
+    <p class="eyebrow">Reference</p>
+    <h1>Server &amp; clients</h1>
+    <p class="lead"><code>kestro-server</code> owns one database file and serves it to many clients at once over TCP or a Unix socket, the way MySQL or PostgreSQL would. Apps write through it, and on the same machine they read the file directly in their own process through the KestroDB C library.</p>
+  </header>
+
+  <h2 id="run-server">Running kestro-server</h2>
+<pre><code class="language-sh">openssl rand -hex 24 &gt; token.txt   # a long random token
+kestro-server --db /var/lib/app/app.kdb --create --tcp 127.0.0.1:7820 --token-file token.txt</code></pre>
+  <p>It prints <code>KESTRODB READY ...</code> when listening and stops cleanly (writing its <a href="durability.html#index-snapshot">index snapshot</a>) on Ctrl+C or SIGTERM.</p>
+  <h3 id="server-options">Options</h3>
+  <table aria-label="kestro-server options">
+    <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>--db FILE</code></td><td>The database file the server owns (required).</td></tr>
+      <tr><td><code>--create</code></td><td>Create the file on the first start; later starts open it, so a service can keep the flag.</td></tr>
+      <tr><td><code>--tcp HOST:PORT</code></td><td>Listen on TCP. Repeatable.</td></tr>
+      <tr><td><code>--unix PATH</code></td><td>Listen on a Unix socket (Linux/macOS; not available on Windows). Repeatable.</td></tr>
+      <tr><td><code>--socket-mode 600</code></td><td>Permissions of the Unix socket (octal).</td></tr>
+      <tr><td><code>--token-file FILE</code></td><td>Require this single access token, which acts as an admin. The <code>KESTRODB_TOKEN</code> environment variable works too. Use either this or <code>--users</code>, not both.</td></tr>
+      <tr><td><code>--users FILE</code></td><td>Users, roles and per-user tables (see <a href="#users">Users and roles</a>).</td></tr>
+      <tr><td><code>--tls-cert PEM --tls-key PEM</code></td><td>Make every <code>--tcp</code> listener TLS-only (see <a href="#tls">TLS</a>). The two go together. On Windows, <code>--tls-pfx FILE [--tls-pfx-password-file FILE]</code> works instead.</td></tr>
+      <tr><td><code>--hash-token</code></td><td>Run on its own: reads a token from standard input and prints its <code>sha256:</code> hash for the users file.</td></tr>
+      <tr><td><code>--max-connections N</code></td><td>Connection limit; the default is 1024.</td></tr>
+      <tr><td><code>--verify-on-open</code></td><td>Verify the whole file before serving (see <a href="durability.html#index-snapshot">index snapshot</a>).</td></tr>
+      <tr><td><code>--index-memory MB</code></td><td>RAM for the key index before it moves to a memory-mapped <code>&lt;file&gt;.idx</code> (default about 32 MB; 0 keeps it all in RAM). See <a href="performance.html#capacity">server capacity</a>.</td></tr>
+      <tr><td><code>--ordered-memory MB</code></td><td>RAM for ordered keys and secondary indexes before their pages move to <code>&lt;file&gt;.sets</code> (default 16 MB).</td></tr>
+      <tr><td><code>--backup-dir DIR --backup-every 1h --backup-keep 7</code></td><td>Scheduled online backups, keeping the newest N (see <a href="#backups">Backups and restore</a>).</td></tr>
+      <tr><td><code>--archive-dir DIR --archive-every 1s</code></td><td>Continuous archive for point-in-time restore.</td></tr>
+      <tr><td><code>--restore SOURCE --to NEW [--txid N | --time ISO]</code></td><td>Run on its own: restore a backup or archive into a new file, then exit.</td></tr>
+      <tr><td><code>--replica-of tcp://|tls://LEADER --replica-token-file FILE [--replica-ca PEM]</code></td><td>Run as a read-only follower of another server (see <a href="#replication">Replication</a>).</td></tr>
+      <tr><td><code>--sync-replicas N [--sync-timeout 5s] [--sync-strict]</code></td><td>On a leader: answer a write only once N followers have it durably (see <a href="#sync-replication">synchronous replication</a>).</td></tr>
+      <tr><td><code>--cluster A,B,C --cluster-self A --cluster-token-file FILE [--election-timeout 1500ms]</code></td><td>Run as a member of a cluster that elects its leader (see <a href="#cluster">Cluster: automatic failover</a>).</td></tr>
+      <tr><td><code>--statement-timeout 30s</code></td><td>A statement that runs longer fails with <code>LIMIT</code> (long scans and joins hold up commits).</td></tr>
+      <tr><td><code>--transaction-timeout 60s</code></td><td>A connection idle inside <code>BEGIN</code> is closed and its transaction rolled back (it holds the write gate).</td></tr>
+      <tr><td><code>--auth-timeout 10s</code></td><td>A client must send its token this soon; before it, requests are at most 64 KB.</td></tr>
+      <tr><td><code>--idle-timeout</code></td><td>Close connections idle this long outside transactions (default: none).</td></tr>
+      <tr><td><code>--max-connections-per-ip 256</code></td><td>Connections from one address (loopback clients are not limited).</td></tr>
+      <tr><td><code>--pread</code> | <code>--mapped</code></td><td>Read mode, as the <code>readMode</code> open option.</td></tr>
+      <tr><td><code>--ordered-sync</code></td><td>As the <code>orderedSync</code> open option.</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">The <code>--pread</code>/<code>--mapped</code> and <code>--ordered-sync</code> rows come from the server&rsquo;s own usage line in <code>src/server.cpp</code>.</p>
+
+  <h3 id="group-commit">Group commit across connections</h3>
+  <p>Writes from all connections that arrive together share one disk flush, so throughput grows with the number of clients. Each write is still durable before its reply. Each connection costs about 40 KB plus a thread. At 4,000 connections the server sustained 168,786 operations/s with 0 errors in the <a href="performance.html#capacity">capacity test</a>.</p>
+
+  <h2 id="security">Security</h2>
+  <p>The server authenticates every connection, checks every request against the user&rsquo;s role and tables, and can encrypt TCP connections with TLS. Refused requests fail with errors that start with <code>AUTH</code>.</p>
+
+  <h3 id="users">Users and roles</h3>
+  <p><code>--users FILE</code> lists one user per line: <code>name role token [tables=a,b]</code>.</p>
+<pre data-title="users.txt"><code class="language-sh"># name     role       token (or sha256:HEX)                         [tables=...]
+admin      admin      sha256:&lt;64 hex digits printed by kestro-server --hash-token&gt;
+app        readwrite  long-random-app-token-here
+reporting  readonly   long-random-report-token      tables=orders,customers</code></pre>
+  <table aria-label="Roles">
+    <thead><tr><th>Role</th><th>May</th></tr></thead>
+    <tbody>
+      <tr><td><code>readonly</code></td><td>read (<code>get</code>, <code>getMany</code>, <code>SELECT</code>), stats (no <code>BEGIN</code>: a transaction holds the write gate)</td></tr>
+      <tr><td><code>readwrite</code></td><td>also write (<code>set</code>, <code>delete</code>, <code>batch</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>)</td></tr>
+      <tr><td><code>admin</code></td><td>also <code>CREATE</code>/<code>DROP</code>/<code>ALTER</code>, <code>verify</code>, <code>backup</code>, <code>compactTo</code>, <code>compact</code>, <code>promote</code></td></tr>
+      <tr><td><code>replica</code></td><td>only replicate (the user a follower connects as)</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><strong>Tables.</strong> A user with <code>tables=</code> may only use those tables (key/value collections count as tables). Every table a SQL statement touches is checked: joins, subqueries anywhere (<code>ORDER BY</code>, <code>LIMIT</code>, <code>HAVING</code>, ...), <code>UNION</code>/<code>INTERSECT</code>/<code>EXCEPT</code> parts, and the tables a write reaches through foreign keys. <code>SHOW TABLES</code> lists only its tables. <code>tables=</code> cannot limit an <code>admin</code> or <code>replica</code>. Only an <code>admin</code> may change rows of a SQL table with key/value writes; other users use SQL, where the table&rsquo;s constraints apply.</li>
+    <li><strong>Hashed tokens.</strong> Store <code>sha256:</code> hashes rather than tokens: <code>echo TOKEN | kestro-server --hash-token</code> prints one. Tokens are compared as SHA-256 in constant time across all users.</li>
+    <li><strong>Token rules.</strong> Tokens must be at least 16 characters; a wrong token is refused after a short delay.</li>
+    <li><strong>Single token.</strong> A single <code>--token-file</code> (or <code>KESTRODB_TOKEN</code>) still works and makes that token an admin.</li>
+    <li><strong>No users.</strong> Without <code>--users</code>/<code>--token-file</code> the server listens only on loopback addresses unless <code>--no-auth</code> says otherwise.</li>
+    <li><strong>Request limits.</strong> Ten failed logins from one address within a minute block logins from it for a minute. A reply or result over 64 MB fails with <code>LIMIT</code> (ask for fewer rows), and a transaction may change at most 1 GB (savepoints count their copies).</li>
+    <li><strong>Backup paths.</strong> <code>backup(name)</code> and <code>compactTo(name)</code> from a client write the plain file name <code>name</code> into the server&rsquo;s <code>--backup-dir</code>, and are refused without one.</li>
+    <li><strong>Reserved keys</strong> and backup, verify and compaction need admin. <code>stats()</code> reports the connection&rsquo;s <code>tls</code>, <code>user</code> and <code>role</code>.</li>
+  </ul>
+
+  <h3 id="tls">TLS</h3>
+<pre><code class="language-sh">kestro-server --db /var/lib/app/app.kdb --tcp 127.0.0.1:7820 --users users.txt --tls-cert cert.pem --tls-key key.pem</code></pre>
+  <p><code>--tls-cert cert.pem --tls-key key.pem</code> makes every <code>--tcp</code> listener TLS-only (TLS 1.2 or newer, with a 10-second handshake limit); Unix sockets stay plain. Clients connect to <code>tls://host:port</code> and verify the server certificate, against the system CAs by default or a CA file you give:</p>
+  <div class="tabs" data-tabs="TLS clients">
+    <div data-tab="Node.js">
+<pre><code class="language-js">import {RemoteDB} from './remote.mjs';
+const db = await RemoteDB.connect('tls://db.example.com:7820', {token, tls: {caFile: '/etc/kestrodb/ca.pem'}});</code></pre>
+    </div>
+    <div data-tab="PHP">
+<pre><code class="language-php">$db = new KestroDB\Client('tls://db.example.com:7820', getenv('KESTRODB_TOKEN'), 5.0,
+                          ['tls' => ['cafile' => '/etc/kestrodb/ca.pem']]);</code></pre>
+    </div>
+    <div data-tab="Python">
+<pre><code class="language-python">db = kestrodb.connect("tls://db.example.com:7820", token=TOKEN, tls={"cafile": "/etc/kestrodb/ca.pem"})</code></pre>
+    </div>
+  </div>
+  <p>Turning verification off is for testing only: Node <code>{tls: {rejectUnauthorized: false}}</code>, Python <code>tls={"verify": False}</code>.</p>
+  <div class="callout callout-warn" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+    <div>
+      <p><span class="callout-title">Windows.</span> Linux and macOS builds use OpenSSL; Windows builds use the system&rsquo;s Schannel (no extra software). On Windows the certificate file may hold the chain (server certificate first) and the key may be PKCS#8, RSA or EC, unencrypted; or give <code>--tls-pfx server.pfx [--tls-pfx-password-file pw.txt]</code> instead. The server keeps its key in the Windows key store (non-exportable, under the account running the server) while it runs and deletes it when it stops.</p>
+      <p><span class="callout-title">In-process readers.</span> <code>readFrom</code> and <code>read_from</code> read the database file directly, so file permissions, not the users file, control them.</p>
+    </div>
+  </div>
+  <p>Tested on Linux with a self-signed certificate and a users file: an admin PHP 8.3 client created a table over <code>tls://</code> and refused a certificate from another CA, a readonly Python client limited to that table was refused an <code>INSERT</code> with <code>AUTH</code>, and a plain TCP connection to the TLS port failed. On Windows, <code>tests/tls-windows</code> runs the Node, PHP and Python clients, replication and a 3-member cluster over TLS.</p>
+
+  <h2 id="protocol">Protocol overview</h2>
+  <p>Clients exchange length-prefixed binary frames with the server. Requests can be pipelined; replies come back in order.</p>
+  <ul>
+    <li>A frame is a <code>u32</code> little-endian length, then that many bytes: a one-byte command followed by its payload. Clients cap frames at 64 MiB.</li>
+    <li>A reply whose first byte is <code>0xFF</code> is an error; the rest is the message, starting with an error code (<code>INPUT</code>, <code>LIMIT</code>, <code>CONFLICT</code>, <code>CORRUPT</code>, <code>AUTH</code>, <code>BUSY</code>, ...).</li>
+    <li>Keys on the wire are <code>collection + "\0" + key</code>, the same keys every client and the C library use, so they all share one database.</li>
+  </ul>
+  <table aria-label="Protocol commands">
+    <thead><tr><th class="c">Command</th><th>Purpose</th><th>Client call</th></tr></thead>
+    <tbody>
+      <tr><td class="c"><code>A</code></td><td>Authenticate with the token</td><td>on connect</td></tr>
+      <tr><td class="c"><code>G</code></td><td>Get one key</td><td><code>get</code></td></tr>
+      <tr><td class="c"><code>M</code></td><td>Get up to 4,096 keys from one snapshot</td><td><code>getMany</code> / <code>get_many</code></td></tr>
+      <tr><td class="c"><code>B</code></td><td>All-or-nothing batch of sets and deletes</td><td><code>set</code>, <code>delete</code>, <code>batch</code></td></tr>
+      <tr><td class="c"><code>E</code></td><td>Execute one SQL statement</td><td><code>sql</code></td></tr>
+      <tr><td class="c"><code>S</code></td><td>Stats (keys, bytes, txid, connections, read mode, ...)</td><td><code>stats</code></td></tr>
+      <tr><td class="c"><code>V</code></td><td>Verify the whole file</td><td><code>verify</code></td></tr>
+      <tr><td class="c"><code>P</code></td><td>Backup to a file in the server&rsquo;s <code>--backup-dir</code></td><td><code>backup</code></td></tr>
+      <tr><td class="c"><code>C</code></td><td>Compact to a file in the server&rsquo;s <code>--backup-dir</code></td><td><code>compactTo</code> / <code>compact_to</code></td></tr>
+      <tr><td class="c"><code>K</code></td><td>Online compaction of the server&rsquo;s own file (admin)</td><td><code>compact</code></td></tr>
+      <tr><td class="c"><code>R</code></td><td>Replication: wait for commits after a point and return whole groups, at most 32 MB per reply (<code>replica</code> role)</td><td>followers</td></tr>
+      <tr><td class="c"><code>X</code></td><td>Promote a follower to leader (admin; refused in a cluster)</td><td><code>promote</code></td></tr>
+      <tr><td class="c"><code>Q</code></td><td>Close the connection</td><td><code>close</code></td></tr>
+    </tbody>
+  </table>
+  <p>The batch payload is the encoding described in <code>src/kestrodb.h</code>: <code>u32</code> count, then per operation <code>u8</code> kind (1 set, 0 delete), <code>u64</code> expected version (all <code>0xff</code> = any), <code>u32</code> key length, <code>u32</code> value length, key, value.</p>
+  <div class="callout callout-warn" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+    <div><p>If a connection drops before a write&rsquo;s reply arrives, that write has an <strong>unknown outcome</strong>. Clients raise an <code>IO</code> error that says so; check the key before retrying.</p></div>
+  </div>
+
+  <h2 id="clients">Clients</h2>
+  <p>All clients have SQL with named and numbered parameters, query helpers, transactions, prepared statements, error classes, reconnect, and <code>get</code>, <code>getMany</code>, <code>set</code>, <code>delete</code>, <code>batch</code> with versions and <code>expectedVersion</code>, with the same keys, so they share one database. Each can talk to <code>kestro-server</code>; the Node, PHP and Python clients can also open a database file in its own process (embedded, one owning process at a time). The Java, .NET, Rust and Go clients are described in <code>CLIENTS.md</code>.</p>
+  <table aria-label="Clients by language">
+    <thead><tr><th>Language</th><th>File</th><th>Server</th><th>Embedded</th><th>Reads on the server&rsquo;s machine</th></tr></thead>
+    <tbody>
+      <tr><td>PHP 7.4+ (64-bit)</td><td><code>clients/php/KestroDB.php</code> (Composer <code>kestrodb/kestrodb</code>)</td><td><code>KestroDB\Client</code></td><td><code>KestroDB\Embedded</code> (FFI)</td><td>in-process with <code>readFrom</code> (PHP FFI)</td></tr>
+      <tr><td>Python 3.8+</td><td><code>clients/python/kestrodb.py</code> (DB-API 2.0)</td><td><code>kestrodb.connect()</code></td><td><code>kestrodb.open()</code> (ctypes)</td><td>in-process with <code>read_from</code> (ctypes)</td></tr>
+      <tr><td>Node.js</td><td><code>remote.mjs</code> (import <code>kestrodb/remote</code>), <code>index.mjs</code></td><td><code>RemoteDB</code></td><td><code>Database</code></td><td>use <code>Database</code> in-process when it is the only process</td></tr>
+      <tr><td>Java 17+</td><td><code>clients/java</code> (<code>kestrodb.jar</code>, no dependencies; minimal JDBC driver)</td><td><code>KestroClient</code></td><td>&mdash;</td><td>through the server</td></tr>
+      <tr><td>.NET 8+</td><td><code>clients/dotnet/KestroDB</code> (no dependencies; minimal ADO.NET provider)</td><td><code>KestroClient</code></td><td>&mdash;</td><td>through the server</td></tr>
+      <tr><td>Rust</td><td><code>clients/rust</code> (crate <code>kestrodb</code>; <code>tls</code> feature for <code>tls://</code>)</td><td><code>Client</code></td><td>&mdash;</td><td>through the server</td></tr>
+      <tr><td>Go 1.21+</td><td><code>clients/go</code> (standard library only; <code>database/sql</code> driver <code>kestrodb</code>)</td><td><code>Client</code></td><td>&mdash;</td><td>through the server</td></tr>
+      <tr><td>Any other (Ruby, C/C++, embedded use from other languages...)</td><td><code>src/kestrodb.h</code> + <code>bin/kestrodb.dll</code> / <code>libkestrodb.so</code></td><td colspan="2">C API: reader and owner modes</td><td><code>KESTRO_OPEN_READER</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="common-api">Common API</h3>
+  <table aria-label="Client API in each language">
+    <thead><tr><th>Node.js (<code>await</code> on RemoteDB)</th><th>PHP</th><th>Python</th><th>Returns</th></tr></thead>
+    <tbody>
+      <tr><td><code>query(sql, params)</code></td><td><code>query($sql, $params)</code></td><td><code>query(sql, params)</code></td><td>all rows (objects / assoc arrays / dicts)</td></tr>
+      <tr><td><code>queryOne(...)</code></td><td><code>queryOne(...)</code></td><td><code>query_one(...)</code></td><td>first row or null</td></tr>
+      <tr><td><code>queryValue(...)</code></td><td><code>queryValue(...)</code></td><td><code>query_value(...)</code></td><td>first column of the first row, or null</td></tr>
+      <tr><td><code>execute(...)</code></td><td><code>execute(...)</code></td><td><code>execute(...)</code></td><td>rows changed (INSERT, UPDATE, DELETE, DDL)</td></tr>
+      <tr><td><code>lastInsertId</code></td><td><code>lastInsertId()</code></td><td><code>last_insert_id</code></td><td>id of the last row INSERT created</td></tr>
+      <tr><td><code>transaction(fn)</code></td><td><code>transaction(fn)</code></td><td><code>with db.transaction():</code></td><td>COMMIT, or ROLLBACK and rethrow on an error</td></tr>
+      <tr><td><code>inTransaction</code></td><td><code>inTransaction()</code></td><td><code>in_transaction</code></td><td></td></tr>
+      <tr><td><code>prepare(sql)</code> &rarr; <code>all/get/value/run</code></td><td><code>prepare($sql)</code> &rarr; PDO-style statement</td><td><code>cursor()</code> (PEP 249)</td><td></td></tr>
+      <tr><td><code>sql(sql, params)</code></td><td><code>sql(...)</code></td><td><code>sql(...)</code></td><td>the raw result: <code>{rows}</code> or <code>{changes, lastInsertId}</code></td></tr>
+      <tr><td><code>get / getMany / set / delete / batch</code></td><td>same</td><td><code>get / get_many / set / delete / batch</code></td><td>key/value API</td></tr>
+    </tbody>
+  </table>
+  <p>Parameters are a list for <code>?</code>, <code>?N</code> and <code>$N</code>, or a map for <code>:name</code> and <code>@name</code> (see <a href="sql.html#placeholders">placeholders</a>).</p>
+
+  <h3 id="client-errors">Errors</h3>
+  <p>Every error has a code (Node <code>err.code</code>, PHP <code>$e-&gt;kind</code>, Python <code>e.kind</code>). All PHP classes extend <code>KestroDB\Exception</code>; all Python classes extend <code>kestrodb.KestroDBError</code>.</p>
+  <table aria-label="Client error codes and classes">
+    <thead><tr><th>Code</th><th>Meaning</th><th>PHP class</th><th>Python class (PEP 249)</th></tr></thead>
+    <tbody>
+      <tr><td><code>CONFLICT</code></td><td>unique constraint, duplicate id, failed <code>expectedVersion</code></td><td><code>ConflictException</code></td><td><code>IntegrityError</code></td></tr>
+      <tr><td><code>INPUT</code></td><td>invalid SQL, parameters, names or values</td><td><code>InputException</code></td><td><code>ProgrammingError</code></td></tr>
+      <tr><td><code>LIMIT</code></td><td>a size or count limit</td><td><code>LimitException</code></td><td><code>DataError</code></td></tr>
+      <tr><td><code>AUTH</code></td><td>wrong token or not allowed</td><td><code>AuthException</code></td><td><code>OperationalError</code></td></tr>
+      <tr><td><code>IO</code></td><td>connection failed or lost; a write without a reply has an unknown outcome</td><td><code>ConnectionException</code></td><td><code>OperationalError</code></td></tr>
+      <tr><td><code>CLOSED</code></td><td>the connection or database was closed by the program</td><td><code>ConnectionException</code></td><td><code>InterfaceError</code></td></tr>
+      <tr><td><code>BUSY</code></td><td>the server is at its connection limit</td><td><code>BusyException</code></td><td><code>OperationalError</code></td></tr>
+      <tr><td><code>READONLY</code></td><td>a follower refused a write; in a cluster the client retries at the leader</td><td><code>Exception</code></td><td><code>DatabaseError</code></td></tr>
+      <tr><td><code>UNAVAILABLE</code></td><td>a cluster&rsquo;s majority did not confirm a write in time: unknown outcome</td><td><code>Exception</code></td><td><code>DatabaseError</code></td></tr>
+      <tr><td><code>CORRUPT</code></td><td>the file failed a checksum</td><td><code>CorruptException</code></td><td><code>InternalError</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="connections">Connections</h3>
+  <ul>
+    <li><strong>Reconnect.</strong> A connection the server closed while it was idle (restart, network) is reopened before the next request. Never inside a transaction: the next call then fails with <code>IO ... connection lost inside a transaction; it was rolled back</code>, and the one after reconnects. A request that was already sent when the connection broke fails with <code>IO</code> (for a write: unknown outcome). Turn it off with <code>reconnect: false</code> / <code>'reconnect' =&gt; false</code>.</li>
+    <li><strong>Clusters.</strong> Give every member&rsquo;s address (Node: an array or a comma-separated string; PHP: comma-separated; Python: a list or comma-separated). Writes go to the leader: a <code>READONLY</code> reply from a follower names it, and the client moves there and sends the request again (nothing was applied), also during an election, for up to <code>failoverTimeout</code> (Node, ms, and PHP, seconds; 15 s) or <code>failover_timeout</code> (Python, 15 s). Not inside a transaction: its connection went with its leader. <code>UNAVAILABLE</code> means a majority did not confirm a write in time: its outcome is unknown, as with <code>IO</code>. <code>db.address</code> (PHP <code>$db-&gt;address()</code>) is the member in use. See <a href="#cluster">Cluster: automatic failover</a>.</li>
+    <li><strong>PHP-FPM.</strong> <code>['persistent' =&gt; true]</code> keeps the connection open across requests in each worker. A transaction left open by a request that died is rolled back when the connection is reused.</li>
+    <li><strong>Threads.</strong> One connection per thread (Python <code>threadsafety = 1</code>). Node&rsquo;s <code>RemoteDB</code> pipelines concurrent calls on one connection.</li>
+  </ul>
+
+  <h3 id="transactions">Transactions per connection</h3>
+  <p>SQL transactions belong to a connection: each <code>RemoteDB</code>, PHP <code>Client</code>, Python client or C library handle runs its own <code>BEGIN</code> ... <code>COMMIT</code> (or <code>ROLLBACK</code>), through <code>sql()</code>, the <code>transaction(fn)</code> helpers, PHP <code>beginTransaction()/commit()/rollBack()</code> or Python <code>begin()/commit()/rollback()</code>.</p>
+<pre><code class="language-php">$db->sql('BEGIN');
+$db->sql('UPDATE accounts SET balance = balance - ? WHERE id = ?', [$amount, $from]);
+$db->sql('UPDATE accounts SET balance = balance + ? WHERE id = ?', [$amount, $to]);
+$db->sql('COMMIT');   // or ROLLBACK</code></pre>
+  <ul>
+    <li>Other connections see nothing until <code>COMMIT</code>, then all of it at once.</li>
+    <li>Plain <code>BEGIN</code> transactions write one at a time across all connections (serializable): from <code>BEGIN</code> to <code>COMMIT</code> one holds the write gate, so other connections&rsquo; writes wait and reads never do. Keep transactions short. Read-only users and followers may not <code>BEGIN</code>.</li>
+    <li><code>BEGIN CONCURRENT</code> transactions run side by side under snapshot isolation and hold no gate until <code>COMMIT</code>. The first to commit a row wins; a later one that wrote the same row fails with <code>CONFLICT</code> and is rolled back, so run it again. Constraints are checked again at <code>COMMIT</code>. Write skew is possible: use plain <code>BEGIN</code> where that matters.</li>
+    <li>Long reads do not hold up writes: a long query lets waiting commits through and keeps reading the state it started with (MVCC; <code>stats().snapshotYields</code>, <code>stats().snapshotMemory</code>).</li>
+    <li>A server connection that drops rolls its open transaction back.</li>
+    <li>Inside a transaction, key/value writes on the same connection are refused. In-process readers (<code>readFrom</code>, <code>read_from</code>) do not run SQL; it goes to the server.</li>
+  </ul>
+  <p>See <a href="sql.html#transactions">SQL transactions</a> for the full rules.</p>
+
+  <h3 id="php">PHP</h3>
+<pre><code class="language-php">require 'clients/php/KestroDB.php';
+$db = new KestroDB\Client('tcp://127.0.0.1:7820', getenv('KESTRODB_TOKEN'), 5.0,
+                          ['readFrom' => '/var/lib/app/app.kdb']);   // optional, fastest reads
+$v = $db->set('users', 'kestro', ['name' => 'Kestro']);    // through the server, durable
+$db->get('users', 'kestro');                              // in this PHP process, sees $v
+
+$db->getMany('users', ['kestro', 'missing']);             // one snapshot, in order; null where missing
+$db->execute('INSERT INTO orders (user, total) VALUES (:u, :t)', ['u' => 'kestro', 't' => 12.5]);
+$rows = $db->query('SELECT * FROM orders WHERE user = ?', ['kestro']);
+$db->transaction(fn($db) => $db->execute('UPDATE orders SET total = 0 WHERE user = ?', ['kestro']));
+
+$st = $db->prepare('SELECT * FROM users WHERE city = :city');
+$st->execute(['city' => 'Kandy']);
+while ($row = $st->fetch()) { /* ... */ }          // also fetchAll(), fetchColumn(), rowCount(), foreach
+
+try {
+    $db->set('users', 'kestro', ['name' => 'H.'], $v);    // expectedVersion: only if still at $v
+} catch (KestroDB\ConflictException $e) {
+    /* someone changed it ($e->kind === 'CONFLICT') */
+}</code></pre>
+  <ul>
+    <li><code>new KestroDB\Client($address, $token = null, $timeout = 5.0, $options = [])</code>; addresses are <code>tcp://host:port</code>, <code>tls://host:port</code> or <code>unix:///path</code>, or a comma-separated list of a cluster&rsquo;s members. Options: <code>readFrom</code>, <code>library</code>, <code>tls</code> (PHP SSL context options), <code>persistent</code> and <code>reconnect</code>.</li>
+    <li><code>set</code>, <code>delete</code> and <code>batch</code> return the new version (an <code>int</code>); <code>get</code> returns <code>['version' =&gt; ..., 'value' =&gt; ...]</code> or <code>null</code>.</li>
+    <li>Also <code>stats()</code>, <code>verify()</code>, <code>backup($path)</code>, <code>compactTo($path)</code> (plain file names in the server&rsquo;s <code>--backup-dir</code>), <code>compact()</code> and <code>promote()</code> (admin) and <code>close()</code>.</li>
+    <li>One connection per <code>Client</code>. PHP-FPM workers each open their own; the server handles many at once and group-commits their writes. Values are stored as JSON.</li>
+    <li>Errors are subclasses of <code>KestroDB\Exception</code> (see <a href="#client-errors">Errors</a>) with a <code>kind</code> property: the leading code (<code>INPUT</code>, <code>LIMIT</code>, <code>CONFLICT</code>, <code>CORRUPT</code>, <code>AUTH</code>, <code>BUSY</code>, ...).</li>
+  </ul>
+
+  <h3 id="python">Python</h3>
+<pre><code class="language-python">import kestrodb
+db = kestrodb.connect("tcp://127.0.0.1:7820", token=TOKEN, read_from="/var/lib/app/app.kdb")
+db.set("users", "kestro", {"name": "Kestro"})
+db.get("users", "kestro")        # {"version": 1, "value": {"name": "Kestro"}}
+db.get_many("users", ["kestro", "missing"])
+db.sql("UPDATE users SET age = age + 1 WHERE id = ?", [5])
+rows = db.query("SELECT * FROM orders WHERE user = :u", {"u": "kestro"})
+with db.transaction():
+    db.execute("UPDATE orders SET total = 0 WHERE user = ?", ["kestro"])
+
+cur = db.cursor()                       # PEP 249
+cur.execute("SELECT id, name FROM users WHERE city = ?", ["Kandy"])
+for id_, name in cur: ...
+cur.executemany("INSERT INTO users (email) VALUES (?)", [("b@example.com",), ("c@example.com",)])  # one transaction
+db.close()</code></pre>
+  <ul>
+    <li><code>kestrodb.connect(address="tcp://127.0.0.1:7820", token=None, timeout=30.0, read_from=None, library=None, tls=None)</code>; addresses are <code>tcp://</code>, <code>tls://</code> or <code>unix://</code>; for a cluster, a list of members or a comma-separated string (see <a href="#connections">Connections</a>).</li>
+    <li>Methods: <code>get</code>, <code>get_many</code>, <code>set(collection, key, value, expected_version=None)</code>, <code>delete</code>, <code>batch</code>, <code>sql</code>, the query helpers above, <code>stats</code>, <code>verify</code>, <code>backup</code>, <code>compact_to</code>, <code>compact</code> and <code>promote</code> (admin), <code>close</code>. Clients work as context managers (<code>with</code>).</li>
+    <li><strong>DB-API 2.0.</strong> Connections start in autocommit mode: each statement commits alone, and transactions are opened explicitly, because a KestroDB transaction holds the write lock until it ends. Set <code>db.autocommit = False</code> for the PEP 249 behaviour where a cursor&rsquo;s first statement opens a transaction that <code>commit()</code> or <code>rollback()</code> ends. Cursor rows are tuples in <code>SELECT</code> order; <code>description</code> names the columns (it is <code>None</code> for a <code>SELECT</code> that returned no rows).</li>
+    <li>One connection per client; use one per thread or process.</li>
+    <li>Errors are subclasses of <code>kestrodb.KestroDBError</code> (see <a href="#client-errors">Errors</a>) with a <code>kind</code> attribute (<code>INPUT</code>, <code>LIMIT</code>, <code>CONFLICT</code>, <code>CORRUPT</code>, <code>AUTH</code>, <code>BUSY</code>, <code>IO</code>, <code>STALE</code>, ...).</li>
+  </ul>
+
+  <h3 id="node">Node.js (RemoteDB)</h3>
+<pre><code class="language-js">import {RemoteDB} from 'kestrodb/remote';   // or './remote.mjs' inside this folder
+const db = await RemoteDB.connect('tcp://127.0.0.1:7820', {token: process.env.KESTRODB_TOKEN});
+await db.set('users', 'kestro', {name: 'Kestro'});
+await db.get('users', 'kestro');   // {version, value}
+await db.execute('INSERT INTO users (email, name) VALUES (:email, :name)', {email: 'a@example.com', name: 'Ann'});
+const user = await db.queryOne('SELECT * FROM users WHERE id = ?', [db.lastInsertId]);
+await db.transaction(async tx => {
+  await tx.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [10, 1]);
+  await tx.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [10, 2]);
+});
+const byCity = db.prepare('SELECT * FROM users WHERE city = ?');
+const rows = await byCity.all(['Kandy']);
+await db.close();</code></pre>
+  <p>Every call is async and returns the same shapes as <code>Database</code>. Calls made in the same tick travel in one write, and the server group-commits concurrent writes. <code>connect</code> takes one address, or a cluster&rsquo;s members as an array or a comma-separated string, and also accepts <code>jsonValidation</code>, <code>timeout</code> (default 5000 ms), <code>reconnect</code>, <code>failoverTimeout</code> (ms, default 15 s) and <code>tls</code> (<code>ca</code> or <code>caFile</code>) for <code>tls://</code> addresses. Errors carry their code in <code>err.code</code>; a transaction lost with its connection is reported, never silently continued outside it. Admin calls include <code>compact()</code> and <code>promote()</code>.</p>
+
+  <h2 id="in-process-reads">In-process reads beside the server</h2>
+  <p><code>readFrom</code> (PHP), <code>read_from</code> (Python) and <code>KESTRO_OPEN_READER</code> (C API) open the database file <strong>without taking ownership</strong>; any number of processes can do it while the server writes.</p>
+  <ul>
+    <li>Before every read the reader looks at the file&rsquo;s commit slot (a few memory loads) and, if it moved, checks and applies only the new transactions, so a read always sees every write acknowledged before it, with no network round trip.</li>
+    <li>Values are checksum-verified as in every other mode.</li>
+    <li>The C library stays loaded for the life of the process and keeps readers open, so a PHP-FPM worker pays the open cost once, not per request.</li>
+    <li>Writes keep going through the server, which is then connected only when first needed.</li>
+    <li>Readers answer <code>get</code>/<code>getMany</code>; SQL from those clients runs on the server.</li>
+    <li>If the database file is replaced (a restored backup), readers report <code>STALE</code>; restart the workers. After an <a href="#compaction">online compaction</a> they see <code>STALE</code> and reopen.</li>
+    <li>Readers also work on a <a href="#replication">follower&rsquo;s</a> machine, against the follower&rsquo;s file.</li>
+  </ul>
+  <div class="callout callout-note" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+    <div><p><span class="callout-title">Setup.</span> PHP needs the FFI extension (on by default for the CLI; set <code>ffi.enable=true</code> for PHP-FPM). Both clients find the library through a <code>library</code> option, the <code>KESTRODB_LIBRARY</code> environment variable, or <code>../../bin</code> relative to the client file. In-process reads need the database file on the same machine as the server (or as a follower).</p></div>
+  </div>
+  <p>Why it matters: reading through the server (one loopback round trip per read) measured 38,000/s with 1 PHP process, against 351,000/s in-process. See <a href="performance.html#php-python">the PHP and Python benchmark</a>.</p>
+
+  <h2 id="backups">Backups and restore</h2>
+  <p>KestroDB&rsquo;s log is append-only: committed bytes never change. Backups are therefore <strong>online</strong>: the commit point is read under a short lock and the committed bytes are copied while writes continue. Every copy is checked (SHA-256 and the chain of every transaction) before it is published under its final name, in bounded memory.</p>
+  <ul>
+    <li><strong>Scheduled backups</strong>: <code>--backup-dir DIR --backup-every 1h --backup-keep 7</code> writes <code>DIR/&lt;name&gt;-YYYYMMDD-HHMMSS.kdb</code> (UTC) on that interval and keeps the newest N. A backup is a normal database file: open it, copy it elsewhere, or restore from it.</li>
+    <li><strong>Continuous archive</strong> (point-in-time recovery): <code>--archive-dir DIR --archive-every 1s</code> keeps <code>DIR/archive.kdb</code>, a valid database holding every committed transaction archived so far, and <code>DIR/timeline</code> (<code>unix_ms txid end</code> per step). Each step appends only what was committed since the last one, so it costs what was written, not the database size; the server takes a last step when it stops. Put the directory on another disk or sync it to another machine (it only grows at the end, so <code>rsync --append</code> works). If the database file is replaced (a restore, a compacted copy), the next step keeps the old archive as <code>archive-&lt;ms&gt;.kdb</code> and starts a new one.</li>
+  </ul>
+  <h3 id="restore">Restore</h3>
+  <p>Offline, into a new file; the server never overwrites:</p>
+<pre><code class="language-sh">kestro-server --restore DIR/archive.kdb --to restored.kdb --time 2026-11-17T14:32:10Z   # state then
+kestro-server --restore DIR/archive.kdb --to restored.kdb --txid 48211                  # after that transaction
+kestro-server --restore backups/app-20261117-140000.kdb --to restored.kdb               # a whole backup</code></pre>
+  <p><code>--time</code> takes ISO 8601 (UTC <code>Z</code> or <code>+HH:MM</code>) or unix milliseconds and picks the last archived point at or before it (precision: the archive interval); <code>--txid</code> cuts exactly after that transaction (<code>stats().txid</code> and every write&rsquo;s version are transaction ids). Then start the server on the restored file. Embedded apps do the same in-process: Node <code>db.archive(dir)</code> / <code>Database.restore(source, dest, {txid, time})</code>, PHP <code>$db-&gt;archive($dir)</code> / <code>Embedded::restore(...)</code>, Python <code>db.archive(dir)</code> / <code>kestrodb.restore(...)</code>, C <code>kestro_backup</code> / <code>kestro_archive</code> / <code>kestro_restore</code>.</p>
+  <h3 id="compaction">Reclaiming space (online compaction)</h3>
+  <p>Updates and deletes leave old versions in the append-only log. <code>compact()</code> rewrites the file to hold only current values <strong>while reads and writes continue</strong>: current values go to a new file shard by shard (writers to a shard wait only while that shard is copied), transactions committed meanwhile are appended, and writes pause only for the last few transactions and the switch. The new file is checked in full (replayed) before it replaces the old one; a crash at any point leaves the database whole. Readers in other processes (<code>readFrom</code>) see <code>STALE</code> and reopen. It returns the committed bytes before and after.</p>
+  <ul>
+    <li>Server (admin role): <code>RemoteDB.compact()</code>, PHP <code>$db-&gt;compact()</code>, Python <code>db.compact()</code>.</li>
+    <li>Embedded: <code>Database.compact()</code>, <code>Embedded::compact()</code>, <code>Local.compact()</code>, C <code>kestro_compact</code>.</li>
+    <li><code>compactTo(path)</code> still writes a compacted copy to a new file instead.</li>
+  </ul>
+
+  <h2 id="replication">Replication</h2>
+  <p>A follower is a second <code>kestro-server</code> holding a byte-identical copy of the leader&rsquo;s log. It serves reads (SQL, key/value, in-process <code>readFrom</code> readers on its machine) and refuses writes with <code>READONLY</code> until it is promoted.</p>
+<pre><code class="language-sh"># on the leader: a user with the replica role (it may only replicate)
+repl  replica  long-random-replica-token
+# on the follower machine:
+kestro-server --db /var/lib/app/replica.kdb --replica-of tls://leader.example.com:7820 \
+             --replica-token-file replica-token.txt [--replica-ca ca.pem] --tcp 0.0.0.0:7820 --users users.txt</code></pre>
+  <ul>
+    <li><strong>Seeding.</strong> A follower whose file does not exist yet copies the leader&rsquo;s log first (online; the leader keeps serving), then streams.</li>
+    <li><strong>Streaming.</strong> The follower asks for the groups after its own end, giving the hash of its last group; the leader answers at once or waits up to a second for the next commit, so changes arrive within milliseconds. The follower commits each transaction through its normal commit path: its log, hashes and chain come out byte-identical, and its key index, SQL tables, secondary indexes and column cache follow (catalog changes, such as <code>CREATE INDEX</code> or <code>ALTER TABLE</code>, included). Each transaction is durable on the follower before the next is requested.</li>
+    <li><strong>Safety.</strong> A follower that no longer continues the leader&rsquo;s log (the leader was compacted or restored) stops with <code>STALE</code>; a different chain after applying stops with <code>DIVERGED</code>. Delete the follower&rsquo;s file and restart it to reseed. Network errors and leader restarts only cause a reconnect (with back-off).</li>
+    <li><strong>Status.</strong> <code>stats().replica</code> on the follower: <code>state</code> (streaming, reconnecting, stopped, promoted), <code>leaderTxid</code>, <code>lagTransactions</code>, <code>lastContactMs</code>, <code>lastError</code>; and <code>stats().readOnly</code>.</li>
+    <li><strong>Failover (manual).</strong> For plain <code>--replica-of</code> followers: stop writes to the old leader, wait until <code>lagTransactions</code> is 0 (or, with <code>--sync-replicas</code>, at once), then <code>promote()</code> the follower (admin; Node <code>RemoteDB.promote()</code>, PHP <code>$db-&gt;promote()</code>, Python <code>db.promote()</code>) and point clients at it. For automatic failover, run a <a href="#cluster">cluster</a>.</li>
+    <li>A follower&rsquo;s file must stay identical: compaction and writes are refused on it; back it up and archive it like any other database.</li>
+  </ul>
+
+  <h3 id="sync-replication">Synchronous replication</h3>
+  <p>By default a commit is acknowledged by the leader before followers have it, so a leader lost without warning can take its last transactions with it. Start the leader with <code>--sync-replicas N</code> and a write (an autocommit SQL write, a <code>COMMIT</code>, or a key/value write) is answered only once N followers have it durably: a leader that dies right after answering loses nothing (RPO 0).</p>
+  <ul>
+    <li>A follower&rsquo;s next replication request confirms everything before it, so this costs one network round trip per commit group (concurrent writers share it), not one per write.</li>
+    <li>If fewer than N followers confirm within <code>--sync-timeout</code> (5 s), the leader logs <code>KESTRODB SYNC degraded</code> and goes on alone (<code>stats().sync.degraded</code>) until a follower catches up (<code>KESTRODB SYNC restored</code>).</li>
+    <li>With <code>--sync-strict</code> it never goes on alone: writes wait for the followers however long it takes (availability traded for zero data loss).</li>
+    <li><code>stats().sync</code>: <code>followers</code>, <code>acknowledgedEnd</code>, <code>degraded</code>, <code>waits</code>, <code>timeouts</code>.</li>
+  </ul>
+
+  <h3 id="cluster">Cluster: automatic failover</h3>
+  <p>Three (or five) <code>kestro-server</code>s, each listing every member, elect one leader among themselves. The leader takes the writes; the others follow it and serve reads. When the leader fails, the others elect a new one within about two election timeouts (under a second with <code>--election-timeout 400ms</code> on a local network; 1.5 s is the default) and clients carry on.</p>
+<pre><code class="language-sh"># users.txt on every member: the cluster token has the replica role
+admin    admin    long-random-admin-token
+cluster  replica  long-random-cluster-token
+# on each machine (the list is the same everywhere; --cluster-self names this machine):
+kestro-server --db /var/lib/app/db.kdb --create --tcp 0.0.0.0:7820 --users users.txt \
+  --cluster tcp://db1:7820,tcp://db2:7820,tcp://db3:7820 --cluster-self tcp://db1:7820 \
+  --cluster-token-file cluster-token.txt</code></pre>
+  <ul>
+    <li><strong>Clients</strong> are given every member: Node <code>RemoteDB.connect('tcp://db1:7820,tcp://db2:7820,tcp://db3:7820', ...)</code> (or an array), PHP <code>new KestroDB\Client('tcp://db1:7820,tcp://db2:7820,tcp://db3:7820', ...)</code>, Python <code>kestrodb.connect(['tcp://db1:7820', ...])</code>. A member that follows answers a write with <code>READONLY ... the leader is tcp://db2:7820</code> (nothing was applied); the client moves there and sends it again, also while an election is under way (up to <code>failoverTimeout</code>, 15 s). Reads are served by whichever member the client is connected to; a follower&rsquo;s reads can trail the leader by its replication lag.</li>
+    <li><strong>No acknowledged write is lost.</strong> A write is answered once a majority of the members (the leader included) has it on disk. A member votes only for a candidate whose log is at least as up to date as its own (by the term of its last transaction, then its length), so any later leader has every answered write. A write that cannot reach a majority within <code>--sync-timeout</code> (5 s), or whose leader steps down first, fails with <code>UNAVAILABLE</code>: its outcome is unknown (as after a lost connection), so check before retrying.</li>
+    <li><strong>One leader.</strong> Terms and votes are flushed to <code>&lt;db&gt;.cluster</code> before a member answers. A leader that cannot hear from a majority for one election timeout steps down, so a leader cut off from the others stops taking writes. Elections start with a pre-vote, and members that hear from their leader refuse to vote, so a member that was cut off cannot depose a working leader when it returns.</li>
+    <li><strong>Rejoining.</strong> A member that was away catches up from the leader. A former leader holding writes no majority confirmed (it was cut off while they were in flight) finds where its log and the leader&rsquo;s part, cuts its log back to there (<code>KESTRODB CLUSTER log cut back to transaction N</code>), restarts in-process and follows. A member without its file (new, or a replaced disk) copies the leader&rsquo;s log first: start it without <code>--create</code>, which is for forming a new cluster (every member starts with an empty log).</li>
+    <li><strong>Status.</strong> <code>stats().cluster</code>: <code>self</code>, <code>term</code>, <code>role</code> (leader, follower, candidate), <code>leader</code>, <code>members</code>, <code>majority</code>, <code>elections</code>, <code>lastLeaderContactMs</code>; <code>stats().sync</code>.</li>
+    <li><strong>Sizes.</strong> Three members survive the loss of one, five the loss of two. Two members survive neither one&rsquo;s loss (a majority of two is two).</li>
+    <li>Compacting the leader makes each follower copy its log again (it no longer continues their copies): plan it for a quiet time. <code>promote()</code> is refused in a cluster.</li>
+  </ul>
+  <div class="callout callout-warn" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+    <div><p><span class="callout-title">The cluster token is the members&rsquo; secret.</span> A client holding it could start elections. A cluster answers a write once a majority has it, so members far apart add their round trip to every write: KestroDB does not do clusters across regions.</p></div>
+  </div>
+
+  <h2 id="embedded-python">Embedded PHP and Python</h2>
+  <p><code>kestrodb.open()</code> gives Python an embedded database owned by the process, like <code>sqlite3</code>, through the C library. PHP has the same with <code>KestroDB\Embedded::open($path, $create)</code> (in-process SQL through FFI).</p>
+<pre><code class="language-python">import kestrodb
+
+with kestrodb.open("app.kdb", create=True) as local:     # this process owns the file
+    v = local.set("users", "kestro", {"name": "Kestro"})   # durable when it returns
+    local.get("users", "kestro")
+    local.set("users", "kestro", {"name": "H."}, expected_version=v)
+    local.sql("SELECT * FROM users WHERE id = ?", [1])
+    local.count()</code></pre>
+  <p>It has the same methods as the server client (<code>get</code>/<code>get_many</code>/<code>set</code>/<code>delete</code>/<code>batch</code>/<code>sql</code> and the query helpers), plus <code>count()</code>, <code>backup()</code>, <code>archive()</code> and <code>compact()</code>, all in-process; <code>kestrodb.restore(...)</code> restores into a new file. In the Python benchmark, one embedded process wrote 9,200 durable writes/s, against 4,500/s through the server.</p>
+<pre><code class="language-php">use KestroDB\Embedded;
+$local = Embedded::open('/data/app.kdb', true);   // no server; needs ext-ffi and the C library</code></pre>
+  <p><code>KestroDB\Embedded</code> and <code>['readFrom' =&gt; ...]</code> use PHP FFI and <code>kestrodb.dll</code> / <code>libkestrodb.so</code> (option <code>library</code>, the <code>KESTRODB_LIBRARY</code> environment variable, or <code>../../bin</code>). <code>Embedded</code> also has <code>backup</code>, <code>archive</code>, <code>compact</code> and <code>Embedded::restore(...)</code>.</p>
+
+  <h2 id="c-api">The C API</h2>
+  <p>One shared library (<code>kestrodb.dll</code> / <code>libkestrodb.so</code> / <code>libkestrodb.dylib</code>) that any language with a C foreign-function interface can load: PHP FFI, Python ctypes, Go cgo, Java FFM/JNA, C# P/Invoke, Rust, Ruby FFI, ... Other languages need a small binding over <code>src/kestrodb.h</code>.</p>
+  <h3 id="c-modes">Open modes</h3>
+  <table aria-label="C API open modes">
+    <thead><tr><th>Mode</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td><code>KESTRO_OPEN_READER</code></td><td>Reads in this process while another process writes (usually <code>kestro-server</code>). Any number of processes can do this at once; each read sees every write acknowledged before it started. Handles are shared per path within a process and stay open for the process lifetime, so opening again is free.</td></tr>
+      <tr><td><code>KESTRO_OPEN_OWNER</code></td><td>This process is the only writer (an embedded database, like SQLite in one process). Add <code>KESTRO_OPEN_CREATE</code> to create the file.</td></tr>
+    </tbody>
+  </table>
+  <h3 id="c-functions">Functions</h3>
+<pre data-title="src/kestrodb.h"><code class="language-c">typedef struct kestro_db kestro_db;
+enum { KESTRO_OPEN_READER = 0, KESTRO_OPEN_OWNER = 1, KESTRO_OPEN_CREATE = 2 };
+/* expected_version for writes: KESTRO_ANY = unconditional, 0 = must not exist, n = must be at version n. */
+#define KESTRO_ANY (-1)
+
+const char* kestro_version(void);
+kestro_db* kestro_open(const char* path, int mode, char* err, size_t errlen);
+int kestro_get(kestro_db* db, const char* key, size_t klen, uint64_t* version, const char** value, size_t* vlen, char* err, size_t errlen);
+int kestro_get_many(kestro_db* db, const unsigned char* payload, size_t n, const unsigned char** reply, size_t* rlen, char* err, size_t errlen);
+int kestro_set(kestro_db* db, const char* key, size_t klen, const char* value, size_t vlen, int64_t expected_version, uint64_t* version, char* err, size_t errlen);
+int kestro_delete(kestro_db* db, const char* key, size_t klen, int64_t expected_version, uint64_t* version, char* err, size_t errlen);
+int kestro_batch(kestro_db* db, const unsigned char* payload, size_t n, uint64_t* version, char* err, size_t errlen);
+int kestro_sql(kestro_db* db, const char* sql, size_t sqllen, const char* params, size_t plen, const char** result, size_t* rlen, char* err, size_t errlen);
+int64_t kestro_count(kestro_db* db);
+int kestro_compact(kestro_db* db, uint64_t* before, uint64_t* after, char* err, size_t errlen);
+int kestro_backup(kestro_db* db, const char* dest, uint64_t* txid, char* err, size_t errlen);
+int kestro_archive(kestro_db* db, const char* dir, uint64_t* txid, char* err, size_t errlen);
+int kestro_restore(const char* source, const char* dest, uint64_t txid, int64_t at_ms, uint64_t* restored_txid, char* err, size_t errlen);
+void kestro_close(kestro_db* db);</code></pre>
+  <ul>
+    <li><code>kestro_get</code> returns 1 found, 0 missing, -1 error. <code>*value</code> points to a per-thread buffer valid until this thread&rsquo;s next <code>kestro_get</code> on any handle.</li>
+    <li><code>kestro_get_many</code> reads up to 4,096 keys from one committed state. Payload: <code>u32</code> count, then per key <code>u32</code> length + bytes. Reply (per-thread buffer): <code>u8</code> 0, <code>u32</code> count, then per key <code>u8</code> found [, <code>u64</code> version, <code>u32</code> length, value].</li>
+    <li><code>kestro_set</code>, <code>kestro_delete</code> and <code>kestro_batch</code> work on owner handles only and are durable when they return. <code>kestro_batch</code> is all-or-nothing, in the server&rsquo;s batch encoding.</li>
+    <li><code>kestro_sql</code> runs one statement on an owner handle. <code>params</code> is a JSON array for the <code>?</code> placeholders (<code>NULL</code> or <code>""</code> for none); <code>*result</code> is <code>{"rows":[...]}</code> or <code>{"changes":n,"lastInsertId":id}</code> in a per-thread buffer. A transaction (<code>BEGIN</code> ... <code>COMMIT</code>) belongs to the handle that runs it.</li>
+    <li><code>kestro_compact</code> is online compaction (<code>before</code>/<code>after</code>: committed bytes of the old file at the switch and of the new one). <code>kestro_backup</code> writes an online backup to a new file on an owner handle. <code>kestro_archive</code> appends what was committed since the last call to <code>dir</code> (<code>archive.kdb</code> + <code>timeline</code>). <code>kestro_restore</code> writes a new database at <code>dest</code> from <code>source</code>, cut after <code>txid</code> (0: all), or at the last archived point at or before <code>at_ms</code> (unix milliseconds; -1: unused).</li>
+    <li>Keys are bytes (1&ndash;1024). To share a database with the language clients, use their key form: <code>collection + "\0" + key</code>.</li>
+    <li>Every function that can fail takes <code>err</code>/<code>errlen</code> and writes a message that starts with an error kind (<code>INPUT</code>, <code>CONFLICT</code>, <code>CORRUPT</code>, <code>STALE</code>, <code>LOCKED</code>, <code>IO</code>, ...).</li>
+    <li>Reader handles are shared and cached; closing one ends it for this process.</li>
+  </ul>
+</article>
+</body>
+</html>

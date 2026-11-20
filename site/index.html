@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KestroDB · durable embedded database with SQL</title>
+<meta name="description" content="KestroDB is a fast, durable database in one file with a C++17 engine. Standard SQL over JSON rows, a key/value API, a network server with group commit, and clients for Node.js, PHP, Python, Java, .NET, Rust, Go and any language with a C FFI.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="assets/site.js"></script>
+</head>
+<body data-page="home" class="bg-bg text-ink">
+<main id="landing">
+
+  <!-- Hero -->
+  <section class="relative overflow-hidden border-b border-line">
+    <div class="hero-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
+    <div class="relative mx-auto grid max-w-8xl gap-12 px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-14 lg:pb-24">
+      <div class="min-w-0">
+        <p class="inline-flex items-center gap-2 rounded-full border border-line bg-elev px-3 py-1 text-xs font-medium text-muted">
+          <span class="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true"></span>
+          KestroDB 0.9 &middot; C++17 engine &middot; one file
+        </p>
+        <h1 class="mt-6 text-[2.35rem] font-bold leading-[1.08] tracking-[-0.035em] text-ink sm:text-5xl lg:text-[3.6rem]">
+          A durable database in one file, speaking the SQL you already know.
+        </h1>
+        <p class="mt-6 max-w-xl text-lg leading-relaxed text-muted">
+          Like SQLite, KestroDB lives next to your app. Rows are JSON documents, every write is on disk before the call returns,
+          and the same database serves Node.js, PHP, Python, Java, .NET, Rust, Go and any language with a C FFI &mdash; in-process, or through
+          <code class="inline-code">kestro-server</code> with many connections at once.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="docs/getting-started.html" class="inline-flex h-11 items-center gap-2 rounded-lg bg-accent px-5 text-sm font-semibold text-on-accent shadow-sm transition hover:opacity-90">
+            Get started
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" class="h-4 w-4"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a href="docs/performance.html" class="inline-flex h-11 items-center rounded-lg border border-line bg-elev px-5 text-sm font-semibold text-ink transition hover:border-accent/60">See the benchmarks</a>
+        </div>
+        <dl class="mt-12 grid max-w-xl grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
+          <div>
+            <dt class="text-xs font-medium text-faint">Durable SQL <code class="font-mono">INSERT</code>, one row</dt>
+            <dd class="mt-1 text-2xl font-bold tracking-tight text-ink">5.4&times; <span class="text-sm font-medium text-muted">SQLite</span></dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium text-faint">PHP reads, 16 processes</dt>
+            <dd class="mt-1 text-2xl font-bold tracking-tight text-ink">1,403,000<span class="text-sm font-medium text-muted">/s</span></dd>
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <dt class="text-xs font-medium text-faint">Errors at 4,000 connections</dt>
+            <dd class="mt-1 text-2xl font-bold tracking-tight text-ink">0</dd>
+          </div>
+        </dl>
+        <p class="mt-4 text-xs text-faint">One Windows 10 machine, Intel i5-14400; SQL measured 2026-11-20, PHP 2026-11-15. <a href="docs/performance.html" class="underline decoration-line underline-offset-2 hover:text-ink">Methodology and caveats</a>.</p>
+      </div>
+
+      <div class="min-w-0">
+        <div class="tabs rounded-2xl border border-line bg-surface/80 p-3 shadow-[0_24px_60px_-30px_rgb(0_0_0/0.35)] backdrop-blur" data-tabs="Quickstart">
+          <div data-tab="Node.js">
+<pre data-title="app.mjs"><code class="language-js">import {Database} from './index.mjs';   // the package's main export: 'kestrodb'
+
+const db = new Database('./app.kdb', {create: true});   // first run; later omit create
+
+db.sql('CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INT)');
+db.sql('INSERT INTO users (email, name, age) VALUES (?, ?, ?)', ['kestro@example.com', 'Kestro', 30]);
+// → {changes: 1, lastInsertId: 1}
+db.sql('SELECT * FROM users WHERE age >= ? ORDER BY age DESC LIMIT 10', [18]);
+// → {rows: [{id: 1, email: ..., name: 'Kestro', age: 30}]}
+db.sql('CREATE INDEX ON users (age)');
+
+db.close();</code></pre>
+          </div>
+          <div data-tab="Build">
+<pre data-title="Terminal"><code class="language-sh">npm run build     # needs Node.js 22+, CMake 3.20+ and a C++17 compiler
+npm test
+node example.mjs</code></pre>
+          </div>
+          <div data-tab="Python">
+<pre data-title="app.py"><code class="language-python">import kestrodb
+
+# Embedded: this process owns the file, like sqlite3
+local = kestrodb.open("app.kdb", create=True)
+
+# Or through kestro-server, reading in-process on the same machine
+db = kestrodb.connect("tcp://127.0.0.1:7820", token=TOKEN, read_from="/var/lib/app/app.kdb")
+db.set("users", "kestro", {"name": "Kestro"})
+db.get("users", "kestro")
+db.sql("UPDATE users SET age = age + 1 WHERE id = ?", [5])</code></pre>
+          </div>
+          <div data-tab="PHP">
+<pre data-title="app.php"><code class="language-php">require 'clients/php/KestroDB.php';
+$db = new KestroDB\Client('tcp://127.0.0.1:7820', getenv('KESTRODB_TOKEN'), 5.0,
+                          ['readFrom' => '/var/lib/app/app.kdb']);   // optional, fastest reads
+$v = $db->set('users', 'kestro', ['name' => 'Kestro']);    // through the server, durable
+$db->get('users', 'kestro');                              // in this PHP process, sees $v
+$db->sql('SELECT * FROM users WHERE email = ?', [$email]);</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why -->
+  <section id="why" class="mx-auto max-w-8xl scroll-mt-20 px-4 py-20 sm:px-6">
+    <div class="max-w-2xl">
+      <p class="text-sm font-semibold text-accent">Why KestroDB</p>
+      <h2 class="mt-2 text-3xl font-bold tracking-tight text-ink sm:text-4xl">Fast where apps feel it, honest where it isn&rsquo;t.</h2>
+      <p class="mt-4 text-lg leading-relaxed text-muted">An embedded engine built for durable writes and point reads, with the SQL and the clients you need to use it from a real application stack.</p>
+    </div>
+    <div class="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+      <article class="bg-elev p-6 sm:p-7">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+        </div>
+        <h3 class="mt-4 font-semibold text-ink">Durable writes, faster</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted">Every write is on disk before the call returns. Concurrent writes share one flush (group commit). One-at-a-time durable writes measured 23,200/s against 6,600/s for LMDB on Windows, and durable single-row SQL <code class="font-mono text-[0.8em]">INSERT</code>s 5.4&times; SQLite; through <code class="font-mono text-[0.8em]">kestro-server</code>, durable single-row SQL <code class="font-mono text-[0.8em]">INSERT</code>s beat MariaDB 2.8&times; and PostgreSQL 1.05&times;.</p>
+      </article>
+      <article class="bg-elev p-6 sm:p-7">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/></svg>
+        </div>
+        <h3 class="mt-4 font-semibold text-ink">SQL you already know</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted">The common core of MySQL, PostgreSQL and SQLite: joins of every kind, correlated subqueries, window functions, <code class="font-mono text-[0.8em]">CASE</code>, <code class="font-mono text-[0.8em]">UNION</code>, enforced <code class="font-mono text-[0.8em]">CHECK</code>, foreign keys and <code class="font-mono text-[0.8em]">UNIQUE</code>, transactions with savepoints, upserts in all three dialects, secondary and unique indexes, and <code class="font-mono text-[0.8em]">?</code>, <code class="font-mono text-[0.8em]">$1</code> or <code class="font-mono text-[0.8em]">:name</code> parameters. Plus a key/value API for the fastest access by key.</p>
+      </article>
+      <article class="bg-elev p-6 sm:p-7">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+        </div>
+        <h3 class="mt-4 font-semibold text-ink">One file</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted">The whole database is a single file next to your app. Its format uses explicit little-endian integers and no OS-specific layout, so you can close it, copy it to another system and <code class="font-mono text-[0.8em]">verify()</code> it. Backups run online and verified, a continuous archive allows point-in-time restore, and <code class="font-mono text-[0.8em]">compact()</code> reclaims space while reads and writes continue.</p>
+      </article>
+      <article class="bg-elev p-6 sm:p-7">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+        </div>
+        <h3 class="mt-4 font-semibold text-ink">Any language</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted">An in-process Node.js addon, clients for PHP, Python, Node, Java, .NET, Rust and Go, and a C library (<code class="font-mono text-[0.8em]">kestrodb.dll</code> / <code class="font-mono text-[0.8em]">libkestrodb.so</code>) for Ruby, C/C++ and anything else with a C FFI. They all share the same keys, so they share one database.</p>
+      </article>
+      <article class="bg-elev p-6 sm:p-7">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6h7M8.5 18h7M6 8.5v7M18 8.5v7"/></svg>
+        </div>
+        <h3 class="mt-4 font-semibold text-ink">Many connections, secured</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted"><code class="font-mono text-[0.8em]">kestro-server</code> serves one database over TCP or a Unix socket, group-committing writes from every connection. At 4,000 connections it sustained 168,786 operations/s with 0 errors. Users get <code class="font-mono text-[0.8em]">readonly</code>, <code class="font-mono text-[0.8em]">readwrite</code> or <code class="font-mono text-[0.8em]">admin</code> roles and optional per-table limits, and TCP can be TLS-only (OpenSSL on Linux, Schannel on Windows). Followers replicate the log for reads, optionally synchronously, and a cluster of three or five servers elects a new leader on its own when one fails.</p>
+      </article>
+      <article class="bg-elev p-6 sm:p-7">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3 class="mt-4 font-semibold text-ink">Integrity checks built in</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted">Every transaction is stored with a SHA-256 hash chained to the previous one, and every value is checked against a checksum when read. Damaged data is reported as <code class="font-mono text-[0.8em]">CORRUPT</code> and never returned.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Benchmarks -->
+  <section id="benchmarks" class="scroll-mt-20 border-y border-line bg-surface">
+    <div class="mx-auto max-w-8xl px-4 py-20 sm:px-6">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div class="max-w-2xl">
+          <p class="text-sm font-semibold text-accent">Benchmark highlights</p>
+          <h2 class="mt-2 text-3xl font-bold tracking-tight text-ink sm:text-4xl">The strongest results, with the context.</h2>
+          <p class="mt-4 leading-relaxed text-muted">One Intel i5-14400 machine, 2026-11-20: Windows 10, and Ubuntu 24.04 under WSL2 (PHP: Windows, 2026-11-15). The charts show Windows; KestroDB is first in all 8 key/value and all 8 SQL rows on both. Every engine acknowledges a write only after asking the OS to make it durable (SQLite in WAL with <code class="inline-code">synchronous=FULL</code>, MySQL with <code class="inline-code">innodb_flush_log_at_trx_commit=1</code>). Higher is better.</p>
+        </div>
+        <a href="docs/performance.html" class="inline-flex h-10 shrink-0 items-center gap-2 self-start rounded-lg border border-line bg-elev px-4 text-sm font-semibold text-ink hover:border-accent/60 lg:self-auto">
+          All benchmark tables
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" class="h-4 w-4"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+
+      <div class="mt-10 grid gap-5 lg:grid-cols-2">
+        <figure class="rounded-2xl border border-line bg-elev p-5 sm:p-6">
+          <figcaption>
+            <span class="block font-semibold text-ink">Durable writes, one at a time</span>
+            <span class="mt-0.5 block text-xs text-faint">Windows 10, Node 24, in-process, operations/s, median of 5 runs</span>
+          </figcaption>
+          <div class="mt-5" role="list">
+            <div class="bar-row" role="listitem"><span class="bar-label me">KestroDB</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar me" style="width:100%"></div></div><span class="bar-val me">23,200</span></div></div>
+            <div class="bar-row" role="listitem"><span class="bar-label">LMDB (fastest other)</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar" style="width:28.45%"></div></div><span class="bar-val">6,600</span></div></div>
+          </div>
+          <p class="mt-4 text-xs leading-relaxed text-faint">This row varies the most between runs on Windows (disk flush timing): KestroDB measured 18&ndash;24K/s across runs. On Linux under WSL2, whose virtual disk makes every flush slow: 3,200/s against SQLite&rsquo;s 1,800/s. Both platforms are on the <a class="underline underline-offset-2 hover:text-ink" href="docs/performance.html#node-engines">performance page</a>.</p>
+        </figure>
+
+        <figure class="rounded-2xl border border-line bg-elev p-5 sm:p-6">
+          <figcaption>
+            <span class="block font-semibold text-ink">Mixed: 95% reads, 5% durable writes</span>
+            <span class="mt-0.5 block text-xs text-faint">Windows 10, Node 24, 256 in flight, operations/s, median of 5 runs</span>
+          </figcaption>
+          <div class="mt-5" role="list">
+            <div class="bar-row" role="listitem"><span class="bar-label me">KestroDB</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar me" style="width:100%"></div></div><span class="bar-val me">547,000</span></div></div>
+            <div class="bar-row" role="listitem"><span class="bar-label">LMDB (fastest other)</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar" style="width:41.86%"></div></div><span class="bar-val">229,000</span></div></div>
+          </div>
+          <p class="mt-4 text-xs leading-relaxed text-faint">On Linux under WSL2: 523,100/s against LMDB&rsquo;s 404,500/s (1.29&times;). The engines&rsquo; order rotates with every phase and run, so no engine always runs right after another&rsquo;s background work. Long SQL reads do not hold up writes (MVCC).</p>
+        </figure>
+
+        <figure class="rounded-2xl border border-line bg-elev p-5 sm:p-6">
+          <figcaption>
+            <span class="block font-semibold text-ink">PHP 8.2, 16 processes: durable single writes</span>
+            <span class="mt-0.5 block text-xs text-faint">Like PHP-FPM workers; writes/s across all processes</span>
+          </figcaption>
+          <div class="mt-5" role="list">
+            <div class="bar-row" role="listitem"><span class="bar-label me">KestroDB</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar me" style="width:100%"></div></div><span class="bar-val me">18,900</span></div></div>
+            <div class="bar-row" role="listitem"><span class="bar-label">MySQL 8.0</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar" style="width:61.38%"></div></div><span class="bar-val">11,600</span></div></div>
+            <div class="bar-row" role="listitem"><span class="bar-label">SQLite</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar" style="width:15.87%"></div></div><span class="bar-val">3,000</span></div></div>
+          </div>
+          <p class="mt-4 text-xs leading-relaxed text-faint">MySQL with the binary log off, which favours MySQL. Write numbers vary &plusmn;20% between runs on this machine.</p>
+        </figure>
+
+        <figure class="rounded-2xl border border-line bg-elev p-5 sm:p-6">
+          <figcaption>
+            <span class="block font-semibold text-ink">SQL: <code class="font-mono text-[0.9em]">INSERT</code> one row, durable</span>
+            <span class="mt-0.5 block text-xs text-faint">Windows 10, in-process from Node, 20,000 rows, statements/s, median of 5 runs; SQLite with prepared statements</span>
+          </figcaption>
+          <div class="mt-5" role="list">
+            <div class="bar-row" role="listitem"><span class="bar-label me">KestroDB</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar me" style="width:100%"></div></div><span class="bar-val me">19,700</span></div></div>
+            <div class="bar-row" role="listitem"><span class="bar-label">SQLite</span><div class="bar-track"><div class="min-w-0 flex-1"><div class="bar" style="width:18.78%"></div></div><span class="bar-val">3,700</span></div></div>
+          </div>
+          <p class="mt-4 text-xs leading-relaxed text-faint"><code class="font-mono">UPDATE &hellip; WHERE id = ?</code>, durable: 14,200/s vs 3,800/s. <code class="font-mono">SELECT</code> by id: 597,000/s vs 310,600/s (Linux: 794,000/s vs 475,400/s). Aggregates over a whole table (<code class="font-mono">GROUP BY</code>, <code class="font-mono">COUNT</code>) also lead, 1.26&ndash;2.50&times;. On Linux the durable rows are close (1.13&times; and 1.06&times;). See the <a class="underline underline-offset-2 hover:text-ink" href="docs/performance.html#sql-vs-sqlite">full SQL table</a>.</p>
+        </figure>
+      </div>
+
+      <div class="mt-5 rounded-2xl border border-warn/30 bg-warn-soft p-5 text-sm leading-relaxed text-ink sm:p-6">
+        <p class="font-semibold">Where KestroDB does not lead</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-ink/90">
+          <li>Row-returning scans: aggregates over a whole table read an in-memory column cache, but a <code class="inline-code">SELECT</code> that returns whole rows without an index reads and parses every row, because each row is a checksum-verified JSON document. Index the columns you filter on.</li>
+          <li>Against PostgreSQL over TCP (2026-11-19), single-connection durable <code class="inline-code">INSERT</code>s lead by only 1.05&times;. Opening a database measures 21.0M keys/s against 31.7M in 0.8.0: the first close after writes now flushes the commit slot once.</li>
+          <li>Reads through the server socket (one loopback round trip per read): 38,000/s with one PHP process, slower than in-process SQLite &mdash; which is why the clients read the file in-process when they can.</li>
+          <li>All of this is from one machine. Single runs on it move by 10&ndash;15% when other programs run, more than some Linux read margins (1.05&ndash;1.18&times;), and SQLite&rsquo;s SQL numbers moved by about 10% between runs. Durable writes on Linux were measured under WSL2, whose virtual disk makes every flush slow for every engine. Run the benchmark on your own hardware before relying on it.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Works with -->
+  <section id="works-with" class="mx-auto max-w-8xl scroll-mt-20 px-4 py-20 sm:px-6">
+    <div class="max-w-2xl">
+      <p class="text-sm font-semibold text-accent">Works with</p>
+      <h2 class="mt-2 text-3xl font-bold tracking-tight text-ink sm:text-4xl">One database, every part of your stack.</h2>
+      <p class="mt-4 leading-relaxed text-muted">All clients have <code class="inline-code">get</code>, <code class="inline-code">getMany</code>, <code class="inline-code">set</code>, <code class="inline-code">delete</code>, <code class="inline-code">batch</code>, <code class="inline-code">sql</code> and versions with <code class="inline-code">expectedVersion</code>. Every server client also connects to <code class="inline-code">tls://</code> addresses with certificate verification (Rust with its <code class="inline-code">tls</code> feature); see <a class="font-medium text-accent underline decoration-accent/40 underline-offset-2" href="docs/server.html#security">security</a>.</p>
+    </div>
+    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <a href="docs/api.html" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">index.mjs &middot; remote.mjs</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">Node.js 22+</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted">The engine runs inside your Node process as an addon: synchronous reads, durable writes, and async writes that group-commit. <code class="font-mono text-[0.8em]">RemoteDB</code> talks to the server.</span>
+      </a>
+      <a href="docs/server.html#php" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">clients/php/KestroDB.php</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">PHP 7.4+ (64-bit)</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted">Writes through <code class="font-mono text-[0.8em]">kestro-server</code>; with <code class="font-mono text-[0.8em]">readFrom</code>, reads the file in-process through PHP FFI. PHP-FPM workers keep readers open across requests.</span>
+      </a>
+      <a href="docs/server.html#python" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">clients/python/kestrodb.py</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">Python 3.8+</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted"><code class="font-mono text-[0.8em]">kestrodb.connect()</code> for the server, <code class="font-mono text-[0.8em]">read_from</code> for in-process reads through ctypes, and <code class="font-mono text-[0.8em]">kestrodb.open()</code> for an embedded database.</span>
+      </a>
+      <a href="docs/server.html#clients" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">clients/java</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">Java 17+</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted"><code class="font-mono text-[0.8em]">KestroClient</code> for the server, no dependencies, with a minimal JDBC driver.</span>
+      </a>
+      <a href="docs/server.html#clients" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">clients/dotnet/KestroDB</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">.NET 8+</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted">An async and blocking <code class="font-mono text-[0.8em]">KestroClient</code> for the server, no dependencies, with a minimal ADO.NET provider that Dapper uses.</span>
+      </a>
+      <a href="docs/server.html#clients" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">clients/rust</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">Rust</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted">The <code class="font-mono text-[0.8em]">kestrodb</code> crate: a <code class="font-mono text-[0.8em]">Client</code> for the server with serde rows, TLS as an optional feature.</span>
+      </a>
+      <a href="docs/server.html#clients" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">clients/go</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">Go 1.21+</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted">A <code class="font-mono text-[0.8em]">Client</code> for the server, standard library only, and a <code class="font-mono text-[0.8em]">database/sql</code> driver.</span>
+      </a>
+      <a href="docs/server.html#c-api" class="group flex flex-col rounded-2xl border border-line bg-elev p-6 transition hover:border-accent/60">
+        <span class="font-mono text-xs font-medium text-faint">src/kestrodb.h</span>
+        <span class="mt-3 text-lg font-semibold text-ink group-hover:text-accent">C API</span>
+        <span class="mt-2 text-sm leading-relaxed text-muted">One shared library for Go, Java, C#, Rust, Ruby, C/C++ and more: an embedded owner mode and a reader mode beside the server.</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- When not -->
+  <section id="when-not" class="scroll-mt-20 border-t border-line">
+    <div class="mx-auto grid max-w-8xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1fr_1.4fr]">
+      <div>
+        <p class="text-sm font-semibold text-accent">When not to use it</p>
+        <h2 class="mt-2 text-3xl font-bold tracking-tight text-ink sm:text-4xl">Know the limits before you pick it.</h2>
+        <p class="mt-4 leading-relaxed text-muted">KestroDB has SQL tables with enforced column types and constraints, joins of every kind, correlated subqueries, window functions, transactions with savepoints, aggregates, secondary and unique indexes, backups, online compaction, replication and automatic failover. Today it does not have the following; the <a class="font-medium text-accent underline decoration-accent/40 underline-offset-2" href="docs/roadmap.html">roadmap page</a> has the full list.</p>
+      </div>
+      <ul class="grid gap-3 sm:grid-cols-2">
+        <li class="rounded-xl border border-line bg-elev p-4"><p class="font-semibold text-ink">The rest of SQL</p><p class="mt-1 text-sm text-muted">No deferred constraints, <code class="font-mono text-[0.8em]">NATURAL</code> joins, <code class="font-mono text-[0.8em]">WITH</code> before <code class="font-mono text-[0.8em]">INSERT</code>/<code class="font-mono text-[0.8em]">UPDATE</code>/<code class="font-mono text-[0.8em]">DELETE</code>, or full-text search.</p></li>
+        <li class="rounded-xl border border-line bg-elev p-4"><p class="font-semibold text-ink">Unindexed row scans</p><p class="mt-1 text-sm text-muted">A <code class="font-mono text-[0.8em]">SELECT</code> that returns whole rows without an index reads and parses every row; there is no column cache for row-returning scans.</p></li>
+        <li class="rounded-xl border border-line bg-elev p-4"><p class="font-semibold text-ink">Serializable concurrent writers</p><p class="mt-1 text-sm text-muted">Plain <code class="font-mono text-[0.8em]">BEGIN</code> transactions write one at a time; <code class="font-mono text-[0.8em]">BEGIN CONCURRENT</code> ones run side by side under snapshot isolation, which allows write skew. One process owns the file; others write through <code class="font-mono text-[0.8em]">kestro-server</code>.</p></li>
+        <li class="rounded-xl border border-line bg-elev p-4"><p class="font-semibold text-ink">Long production use</p><p class="mt-1 text-sm text-muted">It is fuzzed, power-loss tested in simulation, run under the address and thread sanitizers and soak-tested, but has not yet run real production workloads for long. No power-cut tests on real hardware or days-long soak runs yet.</p></li>
+        <li class="rounded-xl border border-line bg-elev p-4"><p class="font-semibold text-ink">Clusters across regions</p><p class="mt-1 text-sm text-muted">A cluster answers a write once a majority of its members has it, so members far apart add their round trip to every write.</p></li>
+        <li class="rounded-xl border border-line bg-elev p-4"><p class="font-semibold text-ink">Network or synced folders</p><p class="mt-1 text-sm text-muted">Network shares, cloud-sync folders and multi-host shared disks are not supported.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="border-t border-line bg-surface">
+    <div class="mx-auto flex max-w-8xl flex-col items-start gap-8 px-4 py-16 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+      <div class="max-w-xl">
+        <h2 class="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Build it, open a file, run a query.</h2>
+        <p class="mt-3 leading-relaxed text-muted">The getting-started guide takes you from a fresh checkout to a SQL table in a few minutes.</p>
+      </div>
+      <div class="grid w-full gap-3 sm:w-auto sm:grid-cols-3">
+        <a href="docs/getting-started.html" class="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-5 text-sm font-semibold text-on-accent hover:opacity-90">Getting started</a>
+        <a href="docs/sql.html" class="inline-flex h-11 items-center justify-center rounded-lg border border-line bg-elev px-5 text-sm font-semibold text-ink hover:border-accent/60">SQL reference</a>
+        <a href="docs/server.html" class="inline-flex h-11 items-center justify-center rounded-lg border border-line bg-elev px-5 text-sm font-semibold text-ink hover:border-accent/60">Server &amp; clients</a>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,21 @@
+[
+  {
+    "version": "0.4",
+    "stats": {
+      "keys": 2,
+      "bytes": 8750,
+      "txid": 4
+    }
+  },
+  {
+    "version": "0.6",
+    "stats": {
+      "keys": 2,
+      "bytes": 8750,
+      "txid": 4,
+      "readMode": "mapped",
+      "commitPolicy": "single-barrier",
+      "pointChecksum": "BLAKE3-256"
+    }
+  }
+]

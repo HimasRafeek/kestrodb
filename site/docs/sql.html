@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQL reference · KestroDB</title>
+<meta name="description" content="The SQL that KestroDB supports: tables, constraints, statements, WITH queries and derived tables, joins, subqueries, window functions, expressions, results, errors, consistency and what is not supported yet.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="sql" class="bg-bg text-ink">
+<article id="doc">
+  <header class="doc-head">
+    <p class="eyebrow">Reference</p>
+    <h1>SQL reference</h1>
+    <p class="lead">KestroDB speaks the common core of MySQL, PostgreSQL and SQLite over JSON-document rows. This page lists every supported statement, how results and errors look, and what is not supported yet.</p>
+  </header>
+
+  <h2 id="clients">Running SQL from any client</h2>
+  <p>The same statements work from every client:</p>
+  <div class="tabs" data-tabs="SQL from each client">
+    <div data-tab="Node.js">
+<pre><code class="language-js">db.sql('SELECT * FROM users WHERE age >= ? ORDER BY age DESC LIMIT 10', [18])   // Node (Database, RemoteDB)</code></pre>
+    </div>
+    <div data-tab="PHP">
+<pre><code class="language-php">$db->sql('SELECT * FROM users WHERE email = ?', [$email]);                       // PHP</code></pre>
+    </div>
+    <div data-tab="Python">
+<pre><code class="language-python">db.sql("UPDATE users SET age = age + 1 WHERE id = ?", [5])                       # Python</code></pre>
+    </div>
+    <div data-tab="C">
+<pre><code class="language-c">/* One SQL statement (owner handles). params: a JSON array for the ? placeholders (NULL or "" for none). */
+int kestro_sql(kestro_db* db, const char* sql, size_t sqllen, const char* params, size_t plen,
+              const char** result, size_t* rlen, char* err, size_t errlen);</code></pre>
+    </div>
+  </div>
+  <p><strong>Always pass values as parameters</strong>, never by pasting them into the SQL text. Parameters can be numbers, strings, booleans, null, or JSON objects and arrays. Over the server, SQL is the protocol&rsquo;s <code>E</code> command.</p>
+  <h3 id="placeholders">Placeholders</h3>
+  <table aria-label="SQL placeholders">
+    <thead><tr><th>Placeholder</th><th>Parameters</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><code>?</code></td><td>a list, in order</td><td class="wrap"><code>WHERE city = ? AND age &gt; ?</code> with <code>['Kandy', 30]</code></td></tr>
+      <tr><td><code>$1</code>, <code>?1</code></td><td>a list, by number (a number may repeat)</td><td class="wrap"><code>WHERE city = $1 OR home = $1</code> with <code>['Kandy']</code></td></tr>
+      <tr><td><code>:name</code>, <code>@name</code></td><td>a map (object, associative array, dict); keys with or without <code>:</code></td><td class="wrap"><code>WHERE city = :city</code> with <code>{city: 'Kandy'}</code></td></tr>
+    </tbody>
+  </table>
+  <p>Named and unnamed placeholders cannot be mixed in one statement; a missing named value is an <code>INPUT</code> error. The client libraries add <code>query</code>, <code>execute</code>, transactions and prepared statements on top of this; see <a href="server.html#common-api">the common client API</a>.</p>
+
+  <h2 id="results">Results</h2>
+  <p>Results are JSON:</p>
+  <table aria-label="Result of each statement">
+    <thead><tr><th>Statement</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>SELECT</code></td><td><code>{"rows": [{...}, ...]}</code>: one object per row</td></tr>
+      <tr><td><code>INSERT</code></td><td><code>{"changes": n, "lastInsertId": id}</code></td></tr>
+      <tr><td><code>UPDATE</code>, <code>DELETE</code></td><td><code>{"changes": n}</code></td></tr>
+      <tr><td><code>CREATE</code>, <code>DROP</code></td><td><code>{"changes": 0}</code> (<code>DROP TABLE</code>: rows removed)</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="errors">Errors</h2>
+  <p>Error messages start with a code:</p>
+  <table aria-label="SQL error codes">
+    <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>INPUT</code></td><td>Bad SQL or values.</td></tr>
+      <tr><td><code>CONFLICT</code></td><td>Duplicate id or unique value, or a violated <code>CHECK</code>, <code>FOREIGN KEY</code> or <code>UNIQUE</code> constraint.</td></tr>
+      <tr><td><code>LIMIT</code></td><td>A size limit was exceeded.</td></tr>
+      <tr><td><code>UNSUPPORTED</code></td><td>SQL that KestroDB does not support yet (see below).</td></tr>
+      <tr><td><code>CORRUPT</code></td><td>Stored data failed its integrity checks.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="tables">Tables and rows</h2>
+<pre><code class="language-sql">CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  name VARCHAR(100),
+  age INT
+);</code></pre>
+  <ul>
+    <li>Every table has an <strong><code>id</code></strong> primary key. Leave it out of <code>INSERT</code> and KestroDB assigns 1, 2, 3, ... (like <code>AUTO_INCREMENT</code> / <code>SERIAL</code>); <code>lastInsertId</code> returns it. You may also give your own integer or text id.</li>
+    <li><strong>Declared columns are enforced.</strong> <code>INSERT</code> and <code>UPDATE</code> (including upserts) check each declared column&rsquo;s type and <code>NOT NULL</code>, and fill <code>DEFAULT</code> values for omitted columns (see <a href="#column-types">column types</a> below).</li>
+    <li><strong>Rows are JSON documents,</strong> so a row may also hold undeclared columns, nested objects (<code>address.city</code>) and arrays. Tables created without column definitions accept anything.</li>
+    <li><strong><code>UNIQUE</code></strong> columns get a unique index: duplicate values fail with <code>CONFLICT</code> (NULL and missing values may repeat, as in SQL).</li>
+    <li>Dotted column names reach inside objects: <code>INSERT INTO t (id, address.city) ...</code>, <code>SELECT address.city FROM t</code>, <code>CREATE INDEX ON t (address.city)</code>.</li>
+  </ul>
+  <h3 id="column-types">Column types</h3>
+  <table aria-label="Declared column types">
+    <thead><tr><th>Declared type</th><th>Accepts</th></tr></thead>
+    <tbody>
+      <tr><td class="wrap"><code>INT</code>, <code>INTEGER</code>, <code>BIGINT</code>, <code>SMALLINT</code>, <code>SERIAL</code>, ...</td><td>whole numbers</td></tr>
+      <tr><td class="wrap"><code>REAL</code>, <code>FLOAT</code>, <code>DOUBLE</code>, <code>DECIMAL</code>, <code>NUMERIC</code></td><td>numbers</td></tr>
+      <tr><td class="wrap"><code>TEXT</code>, <code>VARCHAR(n)</code>, <code>CHAR(n)</code>, <code>UUID</code>, <code>DATE</code>, <code>TIMESTAMP</code>, ...</td><td>text (dates as ISO text); <code>VARCHAR(n)</code> and <code>CHAR(n)</code> hold at most n characters, and longer text fails with <code>INPUT</code> (<code>CHAR</code> is not padded)</td></tr>
+      <tr><td class="wrap"><code>BOOLEAN</code>, <code>BOOL</code></td><td><code>TRUE</code> / <code>FALSE</code></td></tr>
+      <tr><td class="wrap"><code>JSON</code>, <code>JSONB</code>, no type, anything else</td><td>any JSON value</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>NULL is accepted unless the column is <code>NOT NULL</code>.</li>
+    <li>Values are not converted: <code>'5'</code> is not an integer.</li>
+    <li>A <code>DEFAULT</code> must be a constant.</li>
+  </ul>
+
+  <h2 id="constraints">Constraints</h2>
+  <p><code>CHECK</code>, <code>FOREIGN KEY</code> and <code>UNIQUE</code> over several columns are enforced, written on a column or as table constraints, named or not:</p>
+<pre><code class="language-sql">CREATE TABLE books (
+  id INTEGER PRIMARY KEY,
+  author INTEGER REFERENCES authors (id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  price REAL CHECK (price > 0),
+  CONSTRAINT one_title UNIQUE (author, title)
+);
+CREATE TABLE reviews (
+  id INTEGER PRIMARY KEY,
+  book INTEGER,
+  stars INTEGER CHECK (stars BETWEEN 1 AND 5),
+  FOREIGN KEY (book) REFERENCES books ON DELETE SET NULL ON UPDATE CASCADE
+);
+ALTER TABLE orders ADD CONSTRAINT orders_user FOREIGN KEY (user_id) REFERENCES users (id);
+ALTER TABLE users ADD CONSTRAINT adult CHECK (age >= 18);
+ALTER TABLE users DROP CONSTRAINT adult;      -- also DROP FOREIGN KEY name, DROP CHECK name</code></pre>
+  <ul>
+    <li><strong>When they are checked.</strong> At the end of every <code>INSERT</code>, <code>UPDATE</code> and <code>DELETE</code>, against the rows as the statement leaves them (with the transaction&rsquo;s earlier changes), so a statement that swaps two values passes. A violation fails the statement with <code>CONFLICT</code> and changes nothing.</li>
+    <li><strong><code>CHECK (expression)</code></strong>: an expression of the row&rsquo;s own columns (no subqueries, aggregates or parameters). A row fails when it is false; NULL passes, as in SQL.</li>
+    <li><strong>Foreign keys</strong>: the referenced columns must be the <code>id</code> (the default when none are named), a <code>UNIQUE</code> column, or columns with a <code>UNIQUE</code> constraint. A row whose foreign key columns are all set must have its parent; any NULL skips the check.</li>
+    <li><strong>Foreign key actions.</strong> When a parent is deleted or its referenced columns change, the children follow the action: <code>NO ACTION</code> / <code>RESTRICT</code> (the default: the statement fails), <code>CASCADE</code> (children are deleted, or take the new values), <code>SET NULL</code>, <code>SET DEFAULT</code>. Actions chain through further foreign keys, including a table that references itself. <code>DEFERRABLE</code> and <code>MATCH</code> are accepted; checks are never deferred to <code>COMMIT</code>.</li>
+    <li><strong><code>UNIQUE (a, b)</code></strong>: no two rows with the same values in all of the columns; rows with a NULL in any of them may repeat.</li>
+    <li>KestroDB indexes the columns of every foreign key and of every multi-column <code>UNIQUE</code> (one index over all of them, unless an index already starts with those columns), so a parent&rsquo;s delete finds its children quickly. A foreign key may reference the columns of a composite <code>UNIQUE</code> index.</li>
+    <li><code>ALTER TABLE ... ADD CONSTRAINT</code> (and <code>ADD COLUMN</code> with <code>CHECK</code> or <code>REFERENCES</code>) checks the existing rows first. A table that another table&rsquo;s foreign key references cannot be dropped; a column a constraint uses cannot be dropped (drop the constraint first); <code>RENAME COLUMN</code> and <code>RENAME TO</code> carry constraints along.</li>
+    <li>Constraints apply to SQL statements; key/value writes to a table&rsquo;s rows bypass them.</li>
+  </ul>
+
+  <h2 id="statements">Statements</h2>
+  <h3 id="insert">Insert</h3>
+<pre><code class="language-sql">-- Insert one or many rows
+INSERT INTO users (email, name, age) VALUES (?, ?, ?), (?, ?, ?);</code></pre>
+
+  <h3 id="upsert">Upsert</h3>
+  <p>Any of these forms work, so code written for PostgreSQL, MySQL or SQLite carries over:</p>
+<pre><code class="language-sql">INSERT INTO users (id, email, name) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name;
+INSERT INTO users (id, email, name) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name);
+INSERT INTO users (id, email) VALUES (?, ?) ON CONFLICT DO NOTHING;   -- or INSERT IGNORE
+REPLACE INTO users (id, email, name) VALUES (?, ?, ?);                  -- or INSERT OR REPLACE</code></pre>
+
+  <h3 id="select">Query</h3>
+<pre><code class="language-sql">SELECT * FROM users WHERE id = ?;
+SELECT id, name, age * 2 AS double_age FROM users
+  WHERE (city = 'Colombo' OR city = 'Kandy') AND age BETWEEN 18 AND 65 AND name LIKE 'Him%'
+  ORDER BY age DESC, name LIMIT 20 OFFSET 40;
+SELECT city, COUNT(*) AS n, AVG(age) AS avg_age FROM users GROUP BY city HAVING COUNT(*) > 10 ORDER BY n DESC;
+SELECT DISTINCT city FROM users;
+SELECT id, CASE WHEN age < 18 THEN 'minor' WHEN age < 65 THEN 'adult' ELSE 'senior' END AS band FROM users;
+SELECT city, SUM(CASE status WHEN 'paid' THEN total ELSE 0 END) AS paid FROM orders GROUP BY city;</code></pre>
+
+  <h3 id="window-examples">Window functions</h3>
+<pre><code class="language-sql">SELECT name, city, RANK() OVER (PARTITION BY city ORDER BY age DESC) AS rank_in_city FROM users;
+SELECT id, total, SUM(total) OVER (ORDER BY id) AS running_total FROM orders;
+SELECT id, LAG(total) OVER (ORDER BY id) AS previous FROM orders;</code></pre>
+
+  <h3 id="set-examples">UNION, INTERSECT, EXCEPT</h3>
+<pre><code class="language-sql">SELECT email FROM users UNION SELECT email FROM invites ORDER BY email;</code></pre>
+
+  <h3 id="update-delete">Change and remove</h3>
+<pre><code class="language-sql">UPDATE users SET age = age + 1, name = ? WHERE id = ?;
+DELETE FROM users WHERE last_seen < ?;</code></pre>
+
+  <h3 id="join-examples">Joins</h3>
+<pre><code class="language-sql">-- Joins (INNER, LEFT, RIGHT, FULL, CROSS, comma) with aliases
+SELECT u.name, o.total FROM users u JOIN orders o ON o.user_id = u.id WHERE u.city = ?;
+SELECT d.title, u.name FROM users u RIGHT JOIN depts d USING (dept_id);
+SELECT u.name, COUNT(o.id) AS orders FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.name;
+SELECT o.* FROM orders o JOIN users u ON u.id = o.user_id WHERE u.email = ?;</code></pre>
+
+  <h3 id="subquery-examples">Subqueries</h3>
+<pre><code class="language-sql">-- Subqueries, also correlated (naming the outer table)
+SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > ?);
+SELECT * FROM orders WHERE total = (SELECT MAX(total) FROM orders);
+SELECT u.name FROM users u WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);
+SELECT u.name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS orders FROM users u;</code></pre>
+
+  <h3 id="transaction-examples">Transaction block</h3>
+<pre><code class="language-sql">BEGIN;
+UPDATE accounts SET balance = balance - ? WHERE id = ?;
+UPDATE accounts SET balance = balance + ? WHERE id = ?;
+COMMIT;            -- or ROLLBACK
+-- Savepoints: undo part of a transaction
+SAVEPOINT before_items;
+ROLLBACK TO SAVEPOINT before_items;   -- or RELEASE SAVEPOINT before_items</code></pre>
+
+  <h3 id="indexes">Indexes and dropping</h3>
+<pre><code class="language-sql">CREATE INDEX ON users (city);
+CREATE UNIQUE INDEX users_email ON users (email);
+CREATE INDEX ON events (user_id, day);                      -- composite: up to 8 columns
+CREATE UNIQUE INDEX seat ON tickets (show_id, row, number);
+DROP INDEX users_email ON users;
+DROP TABLE users;</code></pre>
+  <p>How composite indexes are used: see <a href="#speed">Indexes and speed</a>.</p>
+
+  <h3 id="alter-table">Change a table</h3>
+<pre><code class="language-sql">ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';   -- existing rows get 'free'
+ALTER TABLE users RENAME COLUMN plan TO tier;                     -- indexes follow
+ALTER TABLE users DROP COLUMN tier;                               -- removed from every row
+ALTER TABLE users RENAME TO members;                              -- rows, indexes, constraints move
+ALTER TABLE users ALTER COLUMN plan SET DEFAULT 'free';           -- later INSERTs get 'free'
+ALTER TABLE users ALTER COLUMN plan DROP DEFAULT;
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;                -- fails if a row has NULL
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN zip TYPE INTEGER;                  -- also SET DATA TYPE; converts '123' to 123
+ALTER TABLE users MODIFY name VARCHAR(50) NOT NULL DEFAULT '';    -- MySQL: the whole new definition</code></pre>
+  <p><code>ADD COLUMN</code> backfills a <code>DEFAULT</code>; <code>DROP COLUMN</code> and <code>RENAME COLUMN</code> rewrite the rows, and the column&rsquo;s indexes are dropped or moved with it. <code>RENAME TO</code> moves the rows, indexes, constraints and the id sequence. <code>ALTER COLUMN</code> changes a column&rsquo;s default, <code>NOT NULL</code> or type, and <code>MODIFY</code> replaces its whole definition; existing rows are checked first. <code>ADD CONSTRAINT</code> and <code>DROP CONSTRAINT</code> are described under <a href="#constraints">Constraints</a>. On a table with rows, <code>ADD COLUMN ... NOT NULL</code> needs a <code>DEFAULT</code>. The rules for each change and the <a href="#transactions">note on atomicity</a> are under Transactions.</p>
+
+  <h2 id="expressions">Expressions</h2>
+  <table aria-label="Supported expressions">
+    <thead><tr><th>Kind</th><th>Supported</th></tr></thead>
+    <tbody>
+      <tr><td>Comparison</td><td class="wrap"><code>=</code> <code>&lt;&gt;</code> <code>!=</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code></td></tr>
+      <tr><td>Logic</td><td class="wrap"><code>AND</code> <code>OR</code> <code>NOT</code></td></tr>
+      <tr><td>Sets and ranges</td><td class="wrap"><code>IN (...)</code>, <code>BETWEEN</code></td></tr>
+      <tr><td>Patterns</td><td class="wrap"><code>LIKE</code> / <code>ILIKE</code> with <code>%</code> and <code>_</code></td></tr>
+      <tr><td>Null tests</td><td class="wrap"><code>IS [NOT] NULL</code></td></tr>
+      <tr><td>Arithmetic</td><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code></td></tr>
+      <tr><td>Strings</td><td class="wrap"><code>||</code> (concatenate)</td></tr>
+      <tr><td>Conditionals</td><td class="wrap"><code>CASE WHEN ... THEN ... ELSE ... END</code> and <code>CASE x WHEN value THEN ... END</code></td></tr>
+      <tr><td>Functions</td><td class="wrap"><code>LOWER</code> <code>UPPER</code> <code>LENGTH</code> <code>ABS</code> <code>ROUND</code> <code>COALESCE</code> <code>IFNULL</code></td></tr>
+      <tr><td>Aggregates</td><td class="wrap"><code>COUNT(*)</code>, <code>COUNT(x)</code>, <code>COUNT(DISTINCT x)</code>, <code>SUM</code> <code>AVG</code> <code>MIN</code> <code>MAX</code>, each with an optional <code>FILTER (WHERE condition)</code></td></tr>
+      <tr><td>Window functions</td><td class="wrap"><code>ROW_NUMBER</code> <code>RANK</code> <code>DENSE_RANK</code> <code>PERCENT_RANK</code> <code>CUME_DIST</code> <code>NTILE</code> <code>LAG</code> <code>LEAD</code> <code>FIRST_VALUE</code> <code>LAST_VALUE</code> <code>NTH_VALUE</code>, and the aggregates, with <code>OVER (...)</code> (see <a href="#window-functions">window functions</a>)</td></tr>
+    </tbody>
+  </table>
+  <p><code>ORDER BY</code> accepts columns, expressions, aliases and positions; NULLs sort first.</p>
+  <h3 id="types">Type rules</h3>
+  <p><strong>Types follow PostgreSQL&rsquo;s strictness:</strong> a number never equals a string, and comparing with NULL gives NULL (so <code>WHERE x = NULL</code> matches nothing; use <code>IS NULL</code>). Division by zero gives NULL.</p>
+
+  <h2 id="transactions">Transactions</h2>
+  <p><code>BEGIN</code> ... <code>COMMIT</code> (or <code>ROLLBACK</code>) groups statements into one atomic, durable commit. Transactions belong to a connection: a Node <code>Database</code> or <code>RemoteDB</code>, a PHP or Python client, or a C library handle.</p>
+<pre><code class="language-js">db.sql('BEGIN');
+db.sql('UPDATE accounts SET balance = balance - ? WHERE id = ?', [amount, from]);
+db.sql('UPDATE accounts SET balance = balance + ? WHERE id = ?', [amount, to]);
+db.sql('COMMIT');   // or db.sql('ROLLBACK')</code></pre>
+  <ul>
+    <li>Inside a transaction, every statement sees the transaction&rsquo;s own changes (and <code>SELECT</code>, aggregates and joins include them). Other connections see nothing until <code>COMMIT</code>, then all of it at once.</li>
+    <li>Unique constraints are checked by each statement, against the table and the transaction&rsquo;s earlier changes, so a duplicate fails at the <code>INSERT</code>, not at <code>COMMIT</code>.</li>
+    <li><strong>Plain <code>BEGIN</code>: one writing transaction at a time</strong> (like SQLite): from <code>BEGIN</code> to <code>COMMIT</code> a transaction holds the write gate, so other connections&rsquo; writes wait for it and the transaction is serializable. Reads never wait. <strong>Keep transactions short.</strong></li>
+    <li><strong><code>BEGIN CONCURRENT</code></strong>: optimistic transactions that run side by side. One holds no gate until <code>COMMIT</code>, so other writers go on meanwhile. Its statements read the database as it was at <code>BEGIN</code> (snapshot isolation) plus its own changes. <code>COMMIT</code> succeeds when no other commit since <code>BEGIN</code> changed a row it writes (first committer wins); otherwise it fails with <code>CONFLICT ... run it again</code> and the transaction is rolled back, so retry it from <code>BEGIN</code>. Foreign keys and unique constraints are checked again at <code>COMMIT</code> against the rows as they are then (a parent deleted meanwhile fails it). Automatic ids are reserved for it when it inserts: a transaction that rolls back leaves a gap.</li>
+    <li><strong>Write skew.</strong> Two <code>BEGIN CONCURRENT</code> transactions can each read what the other writes and both commit, as in PostgreSQL&rsquo;s <code>REPEATABLE READ</code>. Use plain <code>BEGIN</code> where that matters.</li>
+    <li><code>SAVEPOINT name</code> marks a point inside the transaction; <code>ROLLBACK TO [SAVEPOINT] name</code> undoes what came after it (the savepoint stays), <code>RELEASE [SAVEPOINT] name</code> forgets it and later ones. Outside a transaction, <code>SAVEPOINT</code> begins one that releasing that savepoint commits (as in SQLite).</li>
+    <li>A connection that closes, or a server connection that drops, rolls its open transaction back. A failed <code>COMMIT</code> (for example a disk error) ends the transaction.</li>
+    <li>Inside a transaction, key/value writes on the same connection are refused (they would wait for the transaction itself), and <code>CREATE</code>/<code>DROP</code> must run outside transactions.</li>
+    <li><code>ALTER TABLE</code> rewrites the rows it changes in commits of up to 50,000 rows, so on a larger table it is not atomic as a whole (rerun an interrupted <code>RENAME TO</code>). <code>ADD COLUMN ... NOT NULL</code> needs a <code>DEFAULT</code> when the table has rows.</li>
+    <li><code>ALTER COLUMN ... SET DEFAULT</code> changes only later <code>INSERT</code>s; existing rows keep their values. The default must be a constant of the column&rsquo;s type.</li>
+    <li><code>SET NOT NULL</code>, <code>TYPE</code> and <code>MODIFY</code> <strong>check every row first</strong>: a row with NULL (for <code>NOT NULL</code>) or a value that does not convert fails the statement with <code>CONFLICT</code>, names the row, and changes nothing.</li>
+    <li><code>TYPE</code> and <code>MODIFY</code> convert existing values: text holding an integer or a number becomes <code>INTEGER</code> or <code>REAL</code>, numbers and booleans become text, <code>'true'</code>/<code>'t'</code>/<code>'yes'</code>/<code>'on'</code>/<code>'1'</code> and <code>'false'</code>/<code>'f'</code>/<code>'no'</code>/<code>'off'</code>/<code>'0'</code> become <code>BOOLEAN</code>; a number with a fraction does not become <code>INTEGER</code>, and text longer than a new <code>VARCHAR(n)</code> fails. Unique indexes, <code>CHECK</code> and <code>UNIQUE</code> constraints are checked against the converted values.</li>
+    <li><code>TYPE</code> keeps <code>NOT NULL</code> and converts the default; <code>MODIFY</code> replaces the whole definition (type, <code>NOT NULL</code>, <code>DEFAULT</code>), as in MySQL, and <code>UNIQUE</code> in it adds a unique index. <code>USING</code> is not supported.</li>
+    <li>A column used by a foreign key keeps its type class (<code>INTEGER</code> to <code>BIGINT</code> is allowed; <code>INTEGER</code> to <code>TEXT</code> is not).</li>
+    <li><code>RENAME COLUMN</code> renames the field in every row (in place), in its indexes (a named index keeps its name; composite indexes too), in <code>CHECK</code>, <code>UNIQUE</code> and <code>FOREIGN KEY</code> constraints (including other tables&rsquo; foreign keys that reference it), and in the schema. <code>DROP COLUMN</code> drops the composite indexes that use the column.</li>
+    <li>Tables created before 0.9.0 have no stored <code>VARCHAR</code> lengths: their limits apply once an <code>ALTER COLUMN ... TYPE</code> or <code>MODIFY</code> sets them.</li>
+    <li>A transaction can change up to 65,536 rows. Without <code>BEGIN</code>, every statement is its own transaction.</li>
+  </ul>
+
+  <h2 id="with">WITH and derived tables</h2>
+<pre><code class="language-sql">-- A WITH table, read like a table
+WITH spent (user_id, total) AS (SELECT user_id, SUM(total) FROM orders GROUP BY user_id)
+SELECT u.name, s.total FROM users u JOIN spent s ON s.user_id = u.id;
+
+-- A derived table
+SELECT city, n FROM (SELECT city, COUNT(*) AS n FROM users GROUP BY city) AS c WHERE n > 10;
+
+-- SELECT without FROM: one row
+SELECT ? * 2;
+
+-- Recursive: 1 + 2 + ... + 100
+WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 100) SELECT SUM(n) FROM c;</code></pre>
+  <ul>
+    <li><code>WITH name [(columns)] AS (SELECT ...) [, name2 AS (...)] SELECT ...</code>: each WITH table is computed once per statement and read like a table, in <code>FROM</code>, joins and subqueries. A WITH table can use the others of its <code>WITH</code> (in any order) and be used several times. Only the WITH tables the statement uses are computed. A column list renames the columns by position.</li>
+    <li><strong>Derived tables</strong>: <code>FROM (SELECT ...) [AS] alias</code>, also in joins and nested; a derived table may start with its own <code>WITH</code>.</li>
+    <li><code>SELECT</code> without <code>FROM</code> (<code>SELECT 1</code>, <code>SELECT ? * 2</code>) returns one row.</li>
+  </ul>
+  <h3 id="with-recursive">Recursive WITH</h3>
+  <ul>
+    <li>A WITH table that names itself (<code>WITH RECURSIVE</code>; the word <code>RECURSIVE</code> is optional) is base <code>SELECT</code>s, then <code>UNION [ALL]</code> recursive <code>SELECT</code>s that read it. Each round runs the recursive <code>SELECT</code>s over the rows the round before added, until a round adds none.</li>
+    <li><code>UNION</code> drops rows seen before (so cycles end), <code>UNION ALL</code> keeps them. A <code>LIMIT</code> (and <code>OFFSET</code>) on the body stops it early.</li>
+    <li>A recursive <code>SELECT</code> names its table once, in its <code>FROM</code> (not in a subquery), without aggregates or window functions; <code>ORDER BY</code> in a recursive body is not supported.</li>
+    <li>A recursive WITH table stops with <code>LIMIT</code> past 1,000,000 rows or 64 MB, so runaway recursion fails cleanly. A WITH table used before it is computed (<code>WITH t AS (SELECT * FROM t)</code>, or two that use each other) fails with <code>INPUT ... circular reference</code>.</li>
+  </ul>
+  <h3 id="with-limits">Reads, permissions and limits</h3>
+  <ul>
+    <li>The whole statement reads one committed state.</li>
+    <li>A table-limited server user needs access to every table read inside WITH bodies and derived tables; WITH names themselves are not tables.</li>
+    <li>WITH tables and derived tables are kept in memory; joins to them compare against their rows one by one (no index), and they cannot name columns of an outer query.</li>
+    <li><code>WITH</code> is for <code>SELECT</code> only (not before <code>INSERT</code>, <code>UPDATE</code> or <code>DELETE</code>) and not inside <code>IN (...)</code> or a single-value subquery.</li>
+  </ul>
+
+  <h2 id="joins">Joins and subqueries</h2>
+  <h3 id="join-rules">How joins run</h3>
+  <ul>
+    <li><code>JOIN</code> / <code>INNER JOIN</code>, <code>LEFT</code>, <code>RIGHT</code> and <code>FULL [OUTER] JOIN</code>, <code>CROSS JOIN</code> and comma joins, <code>ON</code> or <code>USING (columns)</code>, with table aliases, <code>alias.*</code>, and up to 16 tables.</li>
+    <li><strong>An aliased table is known only by its alias</strong>, as in SQL, also in a single-table <code>SELECT</code>: after <code>FROM users u</code>, write <code>u.id</code>; <code>users.id</code> does not mean <code>u.id</code>.</li>
+    <li>In a join, qualify columns (<code>u.name</code>); an unqualified column is taken from the first table that has it. Unnamed result columns are named after the column without its table, so give duplicates an alias (<code>u.id AS user_id</code>).</li>
+    <li>A join whose <code>ON</code> compares a column of the joined table with earlier tables (<code>o.user_id = u.id</code>) looks matching rows up by <code>id</code> or by an index on that column; <strong>index the join columns</strong>. Other joins compare every pair of rows. <code>WHERE</code> conditions on the first table alone narrow its scan.</li>
+  </ul>
+  <h3 id="subquery-rules">How subqueries run</h3>
+  <ul>
+    <li>Subqueries work in <code>IN (SELECT ...)</code>, <code>EXISTS (SELECT ...)</code> and as a single value <code>(SELECT ...)</code>, in <code>SELECT</code>, <code>UPDATE</code> and <code>DELETE</code>. One that names no outer column runs once, before the statement.</li>
+    <li>A <strong>correlated</strong> subquery names an outer column by the outer table&rsquo;s name or alias (<code>o.user_id = u.id</code>; an unqualified column is the subquery&rsquo;s own). It runs for each outer row with those values, once per distinct value, so <strong>index the columns it filters on</strong>.</li>
+  </ul>
+  <h3 id="window-functions">How window functions work</h3>
+  <ul>
+    <li><code>ROW_NUMBER</code>, <code>RANK</code>, <code>DENSE_RANK</code>, <code>PERCENT_RANK</code>, <code>CUME_DIST</code>, <code>NTILE(n)</code>, <code>LAG</code>/<code>LEAD(x [, offset [, default]])</code>, <code>FIRST_VALUE</code>, <code>LAST_VALUE</code>, <code>NTH_VALUE(x, n)</code>, and <code>COUNT</code> <code>SUM</code> <code>AVG</code> <code>MIN</code> <code>MAX</code> with <code>OVER ([PARTITION BY ...] [ORDER BY ...] [frame])</code>.</li>
+    <li>They work over plain rows, over joins, and <strong>over the result of <code>GROUP BY</code>/<code>HAVING</code></strong>: there, window arguments, <code>PARTITION BY</code> and <code>ORDER BY</code> may use aggregates and group columns, e.g. <code>SELECT city, COUNT(*) AS n, RANK() OVER (ORDER BY COUNT(*) DESC) AS r, SUM(COUNT(*)) OVER () AS total FROM t GROUP BY city</code>.</li>
+    <li><strong>Frames</strong> follow SQLite: <code>ROWS</code>, <code>RANGE</code> or <code>GROUPS</code> <code>BETWEEN</code> start <code>AND</code> end, each bound <code>UNBOUNDED PRECEDING</code>, <code>n PRECEDING</code>, <code>CURRENT ROW</code>, <code>n FOLLOWING</code> or <code>UNBOUNDED FOLLOWING</code> (or the short form <code>ROWS n PRECEDING</code>). The default frame runs from the start of the partition to the current row&rsquo;s last peer (the whole partition without <code>ORDER BY</code>).</li>
+    <li>Offsets are constants or parameters: non-negative integers for <code>ROWS</code> and <code>GROUPS</code>, non-negative numbers for <code>RANGE</code>. <code>RANGE</code> with an offset needs exactly one <code>ORDER BY</code> expression and takes the rows whose value is a number within the offset (a row whose value is NULL or not a number gets its peers). <code>LAG</code> and <code>LEAD</code> ignore the frame.</li>
+    <li><strong>Named windows</strong>: <code>WINDOW w AS (...)</code> after <code>HAVING</code>, used as <code>OVER w</code> or <code>OVER (w ORDER BY ... frame)</code>.</li>
+    <li>Aggregates take <code>FILTER (WHERE condition)</code>, in <code>GROUP BY</code> queries and in windows.</li>
+    <li>Sliding <code>COUNT</code>/<code>SUM</code>/<code>AVG</code>/<code>MIN</code>/<code>MAX</code> cost about the same per row whatever the frame size.</li>
+    <li>Not supported: <code>EXCLUDE</code> clauses and <code>DISTINCT</code> in window aggregates.</li>
+  </ul>
+  <h3 id="set-operations">How UNION, INTERSECT and EXCEPT combine</h3>
+  <p><code>UNION [ALL]</code>, <code>INTERSECT [ALL]</code> and <code>EXCEPT [ALL]</code> are applied left to right; <code>ORDER BY</code> (names or positions) and <code>LIMIT</code> apply to the whole result.</p>
+
+  <h2 id="consistency">Consistency</h2>
+  <ul>
+    <li>Each statement is <strong>atomic</strong>: an <code>UPDATE</code> or <code>DELETE</code> of 1,000 rows commits all of them or none, and is durable before it returns. A <code>SELECT</code> sees one committed state. Use <a href="#transactions"><code>BEGIN</code> ... <code>COMMIT</code></a> to make several statements atomic together.</li>
+    <li><strong>Long reads do not hold up writes</strong> (MVCC). A query that has run for half a millisecond lets a waiting commit through and goes on reading the state it started with: rows changed since are read as they were (from the references their changes replaced, kept while such a query runs). Writes wait at most about a millisecond behind a long query. This costs nothing for short statements.</li>
+    <li>Memory: about 100 bytes per row changed while a long query (or a <code>BEGIN CONCURRENT</code> transaction) runs, freed the moment the last one ends (<code>stats().snapshotMemory</code>); no query fails for it. A <code>CREATE</code>/<code>DROP</code>/<code>ALTER</code> or a compaction while it runs makes it fail with <code>CONFLICT</code> (run it again). <code>stats().snapshotYields</code> counts the commits let through.</li>
+    <li>Statements are parsed once and cached by their text, so reuse the same SQL with different parameters (as you would with prepared statements).</li>
+  </ul>
+
+  <h2 id="speed">Indexes and speed</h2>
+  <p>Queries use an index when the <code>WHERE</code> has <code>=</code>, <code>IN</code>, ranges, <code>BETWEEN</code> or <code>LIKE 'prefix%'</code> on an indexed column (or <code>id</code>), and when <code>ORDER BY</code> an indexed column with a <code>LIMIT</code> can stop early. Other queries scan the table.</p>
+  <ul>
+    <li><strong>Composite indexes</strong> (<code>CREATE [UNIQUE] INDEX ON t (a, b, ...)</code>, up to 8 columns) are used for <code>=</code> or <code>IN</code> on their leading columns, then a range, <code>BETWEEN</code> or <code>LIKE 'prefix%'</code> on the next one: an index on <code>(a, b, c)</code> serves <code>a = ?</code>, <code>a = ? AND b = ?</code>, <code>a = ? AND b &gt; ?</code>, <code>a IN (...) AND b IN (...)</code> and <code>a = ? AND b = ? AND c BETWEEN ? AND ?</code>, but not <code>b = ?</code> alone.</li>
+    <li>A composite index also gives <code>ORDER BY</code> order: <code>WHERE a = ? ORDER BY b, c LIMIT 10</code> or <code>ORDER BY a, b LIMIT 10</code> read only the rows they return (all <code>ORDER BY</code> columns in one direction; a last <code>id</code> is allowed). Leading columns with no condition, or mixed <code>ASC</code>/<code>DESC</code>, mean a scan or a sort.</li>
+    <li>A composite <code>UNIQUE</code> index refuses two rows with the same values in all of its columns (<code>CONFLICT</code>); a row with NULL (or no value) in any of them is exempt, as in SQL. <code>SHOW INDEX FROM t</code> lists each index&rsquo;s <code>columns</code>.</li>
+    <li>Aggregate queries that cannot use an index (<code>COUNT</code>, <code>SUM</code>, <code>GROUP BY</code> ... over a whole table) read a <strong>column cache</strong>: the columns they need, kept in memory per table and updated by every commit. It is built on the first such query (from checksum-verified rows) and capped at about 32 million cells in total; beyond that, queries read rows.</li>
+    <li>Large statements maintain indexes on several cores: index entries, unique checks and index updates for a 500-row <code>INSERT</code> run in parallel.</li>
+  </ul>
+  <p>Measured against SQLite (WAL, <code>synchronous=FULL</code>, prepared statements), in-process from Node, 20,000 rows, a unique and two normal indexes, Windows 10, i5-14400, 2026-11-20 (0.9.0 with MVCC), median of 5 runs (<code>node bench/sql-compare.mjs --runs 5</code>):</p>
+  <table aria-label="SQL statements, KestroDB vs SQLite">
+    <thead><tr><th>Statement</th><th class="num">KestroDB</th><th class="num">SQLite</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>INSERT</code> 500 rows per statement</td><td class="num win">297,800 rows/s</td><td class="num">235,600 rows/s</td><td>KestroDB 1.26&times;</td></tr>
+      <tr><td><code>INSERT</code> one row, durable</td><td class="num win">19,700/s</td><td class="num">3,700/s</td><td>KestroDB 5.4&times;</td></tr>
+      <tr><td><code>UPDATE ... WHERE id = ?</code>, durable</td><td class="num win">14,200/s</td><td class="num">3,800/s</td><td>KestroDB 3.7&times;</td></tr>
+      <tr><td><code>SELECT * WHERE id = ?</code></td><td class="num win">597,000/s</td><td class="num">310,600/s</td><td>KestroDB 1.92&times;</td></tr>
+      <tr><td><code>SELECT * WHERE email = ?</code> (unique)</td><td class="num win">425,600/s</td><td class="num">262,500/s</td><td>KestroDB 1.62&times;</td></tr>
+      <tr><td><code>WHERE city = ? ORDER BY age DESC LIMIT 10</code> (indexed)</td><td class="num win">4,900/s</td><td class="num">1,800/s</td><td>KestroDB 2.75&times;</td></tr>
+      <tr><td><code>COUNT(*) WHERE name LIKE ?</code> (full scan)</td><td class="num win">2,000/s</td><td class="num">1,600/s</td><td>KestroDB 1.26&times;</td></tr>
+      <tr><td><code>GROUP BY</code> with <code>COUNT</code>/<code>AVG</code> (full scan)</td><td class="num win">954/s</td><td class="num">382/s</td><td>KestroDB 2.50&times;</td></tr>
+    </tbody>
+  </table>
+  <p class="caption"><code>SELECT ... WHERE id = ?</code> and <code>WHERE col = ?</code> on a <code>UNIQUE</code> column read that one row directly, without planning a query.</p>
+  <p>On Linux (Ubuntu 24.04 under WSL2, same machine, median of 5 runs) KestroDB is also first in all eight: <code>SELECT</code> by id 794,000 against 475,400/s (1.67&times;), by a unique column 610,600 against 420,600/s (1.45&times;), indexed <code>ORDER BY ... LIMIT</code> 3.42&times;, <code>GROUP BY</code> 3.25&times;, the scan 1.56&times;, bulk <code>INSERT</code> 1.25&times;, and durable <code>INSERT</code>/<code>UPDATE</code> 1.13&times; and 1.06&times; (the virtual disk makes every flush slow there). These come from one machine; SQLite&rsquo;s numbers moved by about 10% between runs there. All results: <a href="performance.html#sql-vs-sqlite">Performance</a>.</p>
+  <div class="callout callout-warn" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+    <div><p><span class="callout-title">Row-returning scans.</span> The full-scan rows above are aggregates, which read the in-memory column cache. A <code>SELECT</code> that returns whole rows from a full scan without an index (no aggregate) still reads and parses every row, because rows are checksum-verified JSON documents. <strong>Index the columns you filter on.</strong></p></div>
+  </div>
+
+  <h2 id="limits">Limits</h2>
+  <p>So that no statement can exhaust the stack (a crash of the server), a statement may nest at most 64 levels of parentheses, function calls, <code>CASE</code>, <code>NOT</code> and unary minus, and 16 levels of subqueries, and an expression may have at most 500 levels of operators (write long <code>OR</code> chains as <code>IN (...)</code>, which has no limit). A statement beyond them fails with <code>INPUT</code>. A statement changes at most 65,536 rows, a transaction 65,536 rows.</p>
+
+  <h2 id="not-supported">Not supported yet</h2>
+  <ul>
+    <li><code>NATURAL</code> joins</li>
+    <li>Deferred constraints</li>
+    <li><code>ALTER COLUMN ... TYPE ... USING</code></li>
+    <li>MySQL <code>CHANGE COLUMN</code></li>
+    <li>Several changes in one <code>ALTER TABLE</code></li>
+    <li><code>WITH</code> before <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code></li>
+    <li>Window <code>EXCLUDE</code> clauses</li>
+    <li>Full-text search</li>
+  </ul>
+  <p>In-process readers (<code>readFrom</code> in PHP, <code>read_from</code> in Python) answer <code>get</code>/<code>getMany</code>; SQL from those clients runs on the server. The <a href="roadmap.html">roadmap</a> also lists the engine&rsquo;s other limits.</p>
+</article>
+</body>
+</html>

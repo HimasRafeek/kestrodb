@@ -1,0 +1,11 @@
+{
+  "name": "kestrodb-bench-competitors",
+  "private": true,
+  "description": "Other embedded databases for bench/compare.mjs. Kept separate so KestroDB itself has no npm dependencies.",
+  "type": "module",
+  "dependencies": {
+    "better-sqlite3": "13.2.0",
+    "classic-level": "3.0.0",
+    "lmdb": "3.5.10"
+  }
+}

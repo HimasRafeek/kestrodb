@@ -1,0 +1,6 @@
+# Files used on Linux keep LF line endings in Windows checkouts too.
+*.sh text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+*.yml text eol=lf
+/packaging/** text eol=lf

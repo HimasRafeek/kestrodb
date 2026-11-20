@@ -1,0 +1,28 @@
+[package]
+name = "kestrodb"
+version = "0.9.0"
+edition = "2021"
+description = "Client for kestro-server (KestroDB): SQL and key/value over TCP, TLS or a Unix socket, with reconnects and cluster leader following"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/HimasRafeek/kestrodb"
+homepage = "https://github.com/HimasRafeek/kestrodb"
+documentation = "https://github.com/HimasRafeek/kestrodb/blob/main/CLIENTS.md"
+keywords = ["database", "sql", "kestrodb", "key-value", "client"]
+categories = ["database"]
+
+[features]
+default = []
+# tls:// addresses (rustls with the ring provider; system CAs or a CA file).
+tls = ["dep:rustls", "dep:rustls-native-certs"]
+
+[dependencies]
+# Parameters, values and rows are JSON. preserve_order keeps a row's columns in SELECT order.
+serde = { version = "1", default-features = false, features = ["std"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# Only with the tls feature.
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = { version = "0.8", optional = true }
+
+[[example]]
+name = "client_test"

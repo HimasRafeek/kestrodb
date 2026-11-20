@@ -1,0 +1,9 @@
+KestroDB
+Copyright 2026 KestroDB contributors
+
+This product includes software developed by others; see THIRD-PARTY.md and
+third-party-notices/ for their notices and licenses:
+- BLAKE3 (vendor/blake3), Apache License 2.0 / Apache License 2.0 with LLVM exception.
+- Node-API headers from Node.js (vendor/node-api), MIT License.
+- OpenSSL 3 (libcrypto, statically linked into the Linux Node addon, C library and
+  worker of the release packages), Apache License 2.0.

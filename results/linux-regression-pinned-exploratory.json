@@ -1,0 +1,305 @@
+{
+  "environment": {
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "cpu_count": 9,
+    "process_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "workload": {
+    "keys": 20000,
+    "value_bytes": 512,
+    "write_operations": 200000,
+    "batch": 1000,
+    "reads": 1000000,
+    "durability": "single-barrier, sync before ACK",
+    "trials_per_version_mode": 5
+  },
+  "trials": [
+    {
+      "version": "06",
+      "mode": "mapped",
+      "trial": 0,
+      "write_ops_s": 427328,
+      "read_ops_s": 506228,
+      "getmany_values_s": 867548,
+      "read8_ops_s": 5325110.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "mapped",
+      "trial": 0,
+      "write_ops_s": 409195,
+      "read_ops_s": 473706,
+      "getmany_values_s": 939992,
+      "read8_ops_s": 6053690.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "mapped",
+      "trial": 1,
+      "write_ops_s": 416052,
+      "read_ops_s": 480944,
+      "getmany_values_s": 693348,
+      "read8_ops_s": 4224540.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "mapped",
+      "trial": 1,
+      "write_ops_s": 481918,
+      "read_ops_s": 623189,
+      "getmany_values_s": 1126630.0,
+      "read8_ops_s": 3866490.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "mapped",
+      "trial": 2,
+      "write_ops_s": 454756,
+      "read_ops_s": 584503,
+      "getmany_values_s": 995689,
+      "read8_ops_s": 4649090.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "mapped",
+      "trial": 2,
+      "write_ops_s": 357095,
+      "read_ops_s": 557906,
+      "getmany_values_s": 893207,
+      "read8_ops_s": 5520180.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "mapped",
+      "trial": 3,
+      "write_ops_s": 391501,
+      "read_ops_s": 682586,
+      "getmany_values_s": 1056950.0,
+      "read8_ops_s": 4080520.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "mapped",
+      "trial": 3,
+      "write_ops_s": 427007,
+      "read_ops_s": 733460,
+      "getmany_values_s": 1174890.0,
+      "read8_ops_s": 6418550.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "mapped",
+      "trial": 4,
+      "write_ops_s": 576817,
+      "read_ops_s": 762637,
+      "getmany_values_s": 1227460.0,
+      "read8_ops_s": 5904670.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "mapped",
+      "trial": 4,
+      "write_ops_s": 501907,
+      "read_ops_s": 690125,
+      "getmany_values_s": 1002250.0,
+      "read8_ops_s": 4619710.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "pread",
+      "trial": 0,
+      "write_ops_s": 386693,
+      "read_ops_s": 217042,
+      "getmany_values_s": 429136,
+      "read8_ops_s": 1332100.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "pread",
+      "trial": 0,
+      "write_ops_s": 292987,
+      "read_ops_s": 360518,
+      "getmany_values_s": 746273,
+      "read8_ops_s": 2934310.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "pread",
+      "trial": 1,
+      "write_ops_s": 507857,
+      "read_ops_s": 477070,
+      "getmany_values_s": 833060,
+      "read8_ops_s": 3824960.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "pread",
+      "trial": 1,
+      "write_ops_s": 412164,
+      "read_ops_s": 444683,
+      "getmany_values_s": 807405,
+      "read8_ops_s": 4300500.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "pread",
+      "trial": 2,
+      "write_ops_s": 456618,
+      "read_ops_s": 449762,
+      "getmany_values_s": 819141,
+      "read8_ops_s": 3216180.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "pread",
+      "trial": 2,
+      "write_ops_s": 434931,
+      "read_ops_s": 480713,
+      "getmany_values_s": 713832,
+      "read8_ops_s": 2656690.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "pread",
+      "trial": 3,
+      "write_ops_s": 480632,
+      "read_ops_s": 451883,
+      "getmany_values_s": 831425,
+      "read8_ops_s": 3945470.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "pread",
+      "trial": 3,
+      "write_ops_s": 392539,
+      "read_ops_s": 426112,
+      "getmany_values_s": 752019,
+      "read8_ops_s": 3131330.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "06",
+      "mode": "pread",
+      "trial": 4,
+      "write_ops_s": 432951,
+      "read_ops_s": 451138,
+      "getmany_values_s": 841730,
+      "read8_ops_s": 4262260.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    },
+    {
+      "version": "07",
+      "mode": "pread",
+      "trial": 4,
+      "write_ops_s": 406165,
+      "read_ops_s": 362021,
+      "getmany_values_s": 698966,
+      "read8_ops_s": 1756530.0,
+      "bytes": 106716292,
+      "checksum": 1546240000
+    }
+  ],
+  "summary": [
+    {
+      "mode": "mapped",
+      "metric": "write_ops_s",
+      "v06_median": 454756,
+      "v07_median": 409195,
+      "v07_over_v06": 0.8998122069857242
+    },
+    {
+      "mode": "mapped",
+      "metric": "read_ops_s",
+      "v06_median": 623189,
+      "v07_median": 557906,
+      "v07_over_v06": 0.8952436580234888
+    },
+    {
+      "mode": "mapped",
+      "metric": "getmany_values_s",
+      "v06_median": 1126630.0,
+      "v07_median": 939992,
+      "v07_over_v06": 0.834339579098728
+    },
+    {
+      "mode": "mapped",
+      "metric": "read8_ops_s",
+      "v06_median": 5325110.0,
+      "v07_median": 4619710.0,
+      "v07_over_v06": 0.8675332528342138
+    },
+    {
+      "mode": "pread",
+      "metric": "write_ops_s",
+      "v06_median": 412164,
+      "v07_median": 434931,
+      "v07_over_v06": 1.0552377209072117
+    },
+    {
+      "mode": "pread",
+      "metric": "read_ops_s",
+      "v06_median": 444683,
+      "v07_median": 451883,
+      "v07_over_v06": 1.0161913093147252
+    },
+    {
+      "mode": "pread",
+      "metric": "getmany_values_s",
+      "v06_median": 807405,
+      "v07_median": 746273,
+      "v07_over_v06": 0.9242858292926103
+    },
+    {
+      "mode": "pread",
+      "metric": "read8_ops_s",
+      "v06_median": 3216180.0,
+      "v07_median": 2934310.0,
+      "v07_over_v06": 0.9123587610146199
+    }
+  ]
+}

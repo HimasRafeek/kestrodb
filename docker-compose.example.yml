@@ -1,0 +1,70 @@
+# KestroDB with Docker Compose. Copy this file, make the secrets, then start one of the profiles:
+#   mkdir -p secrets
+#   openssl rand -hex 24 > secrets/token.txt                         # single server: admin token
+#   printf 'admin admin %s\ncluster replica %s\n' "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" > secrets/users.txt
+#   awk '$1=="cluster"{print $3}' secrets/users.txt > secrets/cluster-token.txt   # cluster: same token as the replica user
+#   chmod 644 secrets/*     # the server runs as uid 10001 and must be able to read them (or chown 10001)
+#   docker compose -f docker-compose.example.yml --profile single up -d     # one server on port 7820
+#   docker compose -f docker-compose.example.yml --profile cluster up -d    # three servers on 7821-7823
+# Clients connect with the admin token: tcp://127.0.0.1:7820, or for the cluster every member:
+# tcp://127.0.0.1:7821,tcp://127.0.0.1:7822,tcp://127.0.0.1:7823 (from other containers on the
+# network: tcp://kdb1:7820,tcp://kdb2:7820,tcp://kdb3:7820). A real cluster puts each member on
+# its own machine; three on one host only shows how it is set up.
+
+x-kestrodb: &kestrodb
+  build: .
+  image: kestrodb:latest
+  restart: unless-stopped
+  stop_grace_period: 2m   # the server writes its index snapshot when it stops
+
+services:
+  kestrodb:
+    <<: *kestrodb
+    profiles: [single]
+    ports: ["127.0.0.1:7820:7820"]
+    volumes: ["kestrodb-data:/data"]
+    secrets: [kestrodb_token]
+    environment:
+      KESTRODB_TOKEN_FILE: /run/secrets/kestrodb_token
+    # Extra kestro-server options go in command, for example daily backups in the volume:
+    # command: ["--backup-dir", "/data/backups", "--backup-every", "24h", "--backup-keep", "7"]
+
+  kdb1: &member
+    <<: *kestrodb
+    profiles: [cluster]
+    hostname: kdb1
+    ports: ["127.0.0.1:7821:7820"]
+    volumes: ["kdb1-data:/data"]
+    secrets: [kestrodb_users, kestrodb_cluster_token]
+    environment:
+      KESTRODB_USERS_FILE: /run/secrets/kestrodb_users
+    command: ["--cluster", "tcp://kdb1:7820,tcp://kdb2:7820,tcp://kdb3:7820", "--cluster-self", "tcp://kdb1:7820",
+              "--cluster-token-file", "/run/secrets/kestrodb_cluster_token", "--election-timeout", "1s"]
+  kdb2:
+    <<: *member
+    hostname: kdb2
+    ports: ["127.0.0.1:7822:7820"]
+    volumes: ["kdb2-data:/data"]
+    command: ["--cluster", "tcp://kdb1:7820,tcp://kdb2:7820,tcp://kdb3:7820", "--cluster-self", "tcp://kdb2:7820",
+              "--cluster-token-file", "/run/secrets/kestrodb_cluster_token", "--election-timeout", "1s"]
+  kdb3:
+    <<: *member
+    hostname: kdb3
+    ports: ["127.0.0.1:7823:7820"]
+    volumes: ["kdb3-data:/data"]
+    command: ["--cluster", "tcp://kdb1:7820,tcp://kdb2:7820,tcp://kdb3:7820", "--cluster-self", "tcp://kdb3:7820",
+              "--cluster-token-file", "/run/secrets/kestrodb_cluster_token", "--election-timeout", "1s"]
+
+secrets:
+  kestrodb_token:
+    file: ./secrets/token.txt
+  kestrodb_users:
+    file: ./secrets/users.txt
+  kestrodb_cluster_token:
+    file: ./secrets/cluster-token.txt
+
+volumes:
+  kestrodb-data:
+  kdb1-data:
+  kdb2-data:
+  kdb3-data:

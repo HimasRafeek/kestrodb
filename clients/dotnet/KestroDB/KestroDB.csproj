@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>KestroDB</RootNamespace>
+    <AssemblyName>KestroDB</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IsTrimmable>false</IsTrimmable>
+    <Version>0.9.0</Version>
+    <PackageId>KestroDB</PackageId>
+    <Description>Client for kestro-server (KestroDB): SQL with parameters, transactions, key/value with versions, TLS, reconnect, cluster leader following, and a minimal ADO.NET provider.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/HimasRafeek/kestrodb</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/HimasRafeek/kestrodb.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="KestroDB.Tests" />
+  </ItemGroup>
+
+</Project>

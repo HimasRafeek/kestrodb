@@ -1,0 +1,24 @@
+{
+    "name": "kestrodb/kestrodb",
+    "description": "KestroDB client: SQL and key/value over kestro-server (TCP, TLS, Unix socket) or in-process through the C library (FFI)",
+    "type": "library",
+    "license": "Apache-2.0",
+    "homepage": "https://github.com/HimasRafeek/kestrodb",
+    "support": {
+        "issues": "https://github.com/HimasRafeek/kestrodb/issues",
+        "source": "https://github.com/HimasRafeek/kestrodb",
+        "docs": "https://github.com/HimasRafeek/kestrodb/blob/main/CLIENTS.md"
+    },
+    "keywords": ["database", "sql", "kestrodb", "embedded", "key-value"],
+    "require": {
+        "php": ">=7.4",
+        "ext-json": "*"
+    },
+    "suggest": {
+        "ext-ffi": "In-process reads (readFrom) and embedded databases (KestroDB\\Embedded)",
+        "ext-openssl": "tls:// connections"
+    },
+    "autoload": {
+        "files": ["KestroDB.php"]
+    }
+}

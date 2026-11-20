@@ -20,7 +20,9 @@ static unsigned long process_id() { return (unsigned long)getpid(); }
 namespace fs = std::filesystem;
 
 static std::string g_path;
-static std::unique_ptr<Store> g_db;
+// Never destroyed: libFuzzer ends with exit(), after OpenSSL's own cleanup has run, and closing
+// the store then would hash its metadata with a torn-down libcrypto (a crash at exit).
+static std::unique_ptr<Store>& g_db = *new std::unique_ptr<Store>;
 static size_t g_runs = 0;
 
 static void fresh() {

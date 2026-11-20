@@ -62,8 +62,10 @@ for s in $STEPS; do case $s in
     done; wait
     for t in parse protocol sql_exec open; do
       len=$([ $t = open ] && echo 262144 || echo 2048); corpus=fuzz/corpus-${t/sql_exec/sql}
-      build-fuzz/fuzz_$t -max_total_time=$secs -timeout=10 -max_len=$len -artifact_prefix=build-fuzz/crashes/$t- -print_final_stats=1 "$corpus" 2>&1 | grep -E "stat::number_of_executed_units|ERROR|SUMMARY" || true
-      [ "${PIPESTATUS[0]}" = 0 ] || fail "fuzz_$t (inputs in $WORK/build-fuzz/crashes)"
+      # The fuzzer's own status (with pipefail, PIPESTATUS after "|| true" would be true's).
+      st=0; build-fuzz/fuzz_$t -max_total_time=$secs -timeout=10 -max_len=$len -artifact_prefix=build-fuzz/crashes/$t- -print_final_stats=1 "$corpus" >build-fuzz/$t.log 2>&1 || st=$?
+      grep -E "stat::number_of_executed_units|ERROR|SUMMARY" build-fuzz/$t.log || true
+      [ $st = 0 ] || fail "fuzz_$t (log: $WORK/build-fuzz/$t.log, inputs in $WORK/build-fuzz/crashes)"
     done ;;
   *) fail "unknown step $s" ;;
 esac; done

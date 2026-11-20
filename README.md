@@ -46,8 +46,10 @@ db.close();
 ## Install
 
 Prebuilt binaries for **Windows x64**, **Linux x64** and **Linux arm64** (glibc 2.34 or newer:
-Ubuntu 22.04+, Debian 12+, RHEL/Rocky/Alma 9+, Fedora 35+, Amazon Linux 2023). Elsewhere,
-[build from source](#building-from-source).
+Ubuntu 22.04+, Debian 12+, RHEL/Rocky/Alma 9+, Fedora 35+, Amazon Linux 2023). On Linux,
+`kestro-server` also uses the system's OpenSSL 3 (`libssl3` / `openssl-libs`: installed on
+most systems; minimal container images need it added); the embedded database needs nothing
+else. Elsewhere, [build from source](#building-from-source).
 
 **Node.js 22+**
 

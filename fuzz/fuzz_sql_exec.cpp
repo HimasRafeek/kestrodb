@@ -58,7 +58,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     std::string line = in.substr(at, nl - at); at = nl + 1;
     if (!line.empty() && (line[0] == '[' || line[0] == '{')) { params = line; continue; }
     // As on a server, a statement stops at a time limit (with LIMIT) instead of running long.
-    try { Store::StatementDeadline limit(std::chrono::milliseconds(800));  // 8 statements stay under -timeout=10 g_db->sql(&session, line, params); } catch (const std::exception&) {}
+    try {
+      Store::StatementDeadline limit(std::chrono::milliseconds(800));  // 8 statements stay under -timeout=10
+      g_db->sql(&session, line, params);
+    } catch (const std::exception&) {}
     params = "[]";
   }
   g_db->end_session(session);

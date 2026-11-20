@@ -34,9 +34,9 @@ venv/
 
 # Fuzzing (fuzz/seed.mjs writes the corpora; crashes are local)
 /fuzz/corpus-*/
-crash-*
-leak-*
-timeout-*
+/crash-*
+/leak-*
+/timeout-*
 
 # Logs and local results
 *.log
